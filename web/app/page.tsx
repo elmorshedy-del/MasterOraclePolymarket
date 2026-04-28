@@ -1,3 +1,4 @@
+import { SleevesTable } from "@/components/SleevesTable";
 import { SystemHealth } from "@/components/SystemHealth";
 
 export default function OverviewPage() {
@@ -7,7 +8,7 @@ export default function OverviewPage() {
         <section>
           <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Phase 1 — ingestion is live; strategies arrive in subsequent phases.
+            Phase 2 — fill simulator and position tracker online. Add a sleeve YAML to start running.
           </p>
         </section>
 
@@ -18,18 +19,34 @@ export default function OverviewPage() {
           <Card label="Ingestion" value="live" sub="see sidebar →" />
         </section>
 
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-medium text-muted-foreground">Sleeves</h2>
+            <a
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              href="/sleeves"
+            >
+              View all →
+            </a>
+          </div>
+          <SleevesTable />
+        </section>
+
         <section className="rounded-lg border border-border/60 bg-card p-6">
           <h2 className="text-sm font-medium text-muted-foreground">Status</h2>
           <p className="mt-2 text-sm">
-            Phase 1 brings ingestion online: Polymarket CLOB, activity feed,
-            news RSS, and optional Kalshi/Deribit/Binance pipes. Events flow into
-            Postgres; in-memory order books are reconstructed in real time.
+            Phase 2 is live. Strategies plugged in via{" "}
+            <code className="rounded bg-muted px-1.5 py-0.5 text-[12px]">
+              src/strategies/&lt;name&gt;/
+            </code>{" "}
+            and configured via sleeve YAMLs are routed through the fill simulator
+            and position tracker. Trades feed the analytics pipeline.
           </p>
           <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
             <li>✓ Phase 0: scaffolding, interfaces, configs, schema</li>
-            <li>● Phase 1: ingestion pipes + System Health</li>
-            <li>→ Phase 2: fill simulator + position tracker</li>
-            <li>→ Phase 3: full dashboard + replay engine</li>
+            <li>✓ Phase 1: ingestion pipes + System Health</li>
+            <li>● Phase 2: fill simulator + position tracker + sleeve P&L</li>
+            <li>→ Phase 3: full dashboard + replay engine + tag system</li>
             <li>→ Phase 4: strategy template + reference strategy</li>
             <li>→ Phase 5+: strategies one-by-one with full rigor</li>
           </ul>
