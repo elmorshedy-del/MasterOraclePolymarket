@@ -1,0 +1,22 @@
+# Example sleeve config. Copy this file when creating a new sleeve.
+# The leading underscore prevents the loader from picking this up.
+
+sleeve_id: example_sleeve
+strategy: cross_outcome_arb
+config_id: default
+enabled: false
+mode: replay_only            # replay_only | live_log | live_signal | live_full
+starting_capital_usd: 5000
+edge_class: pure_arb
+
+params:
+  min_edge_bps: 100          # require ≥1.00% gross edge before signaling
+  max_size_per_trade_usd: 200
+
+market_filter:
+  categories: [politics, sports, weather, crypto-event]
+  min_24h_volume_usd: 1000
+
+max_concurrent_positions: 25
+max_exposure_per_market_usd: 500
+loss_management: none        # none | stop_-30 | stop_-50

@@ -1,0 +1,78 @@
+# <STRATEGY_NAME> — Strategy Design Document
+
+> Status: draft | implemented | replay_only | live_log | live_signal | live_full | killed | graduated
+>
+> Author: <name>
+> Edge class: pure_arb | maker | latency_sensitive | directional | copy | tail | slow
+
+---
+
+## 1. Thesis
+
+<One sentence. What is the edge?>
+
+## 2. Mechanics
+
+<Precise math or predicates that produce a signal. Show the calculation a junior could implement from this section alone.>
+
+## 3. Data dependencies
+
+| Source | What we read | Required? |
+|---|---|---|
+| Polymarket CLOB | bids/asks/trades for markets matching <filter> | yes |
+| ... | ... | ... |
+
+## 4. Entry rules
+
+<Precise entry predicates with examples.>
+
+```
+WHEN <condition> AND <condition>
+EMIT <signal>
+WITH price=<formula>, size=<formula>, reason=<string>
+```
+
+## 5. Exit rules
+
+<TP, stop, time-based, resolution-based.>
+
+## 6. Sizing logic
+
+<How is size computed per trade?>
+
+## 7. Risk rules
+
+- Max concurrent positions: <N>
+- Max exposure per market: <$X>
+- Max correlated exposure: <X across category Y>
+- Other: <...>
+
+## 8. Failure modes
+
+| Mode | What it looks like | How we detect |
+|---|---|---|
+| ... | ... | ... |
+
+## 9. References
+
+- <Academic paper / industry post / scout finding>
+- ...
+
+## 10. Validation plan
+
+- **Synthetic tests**: <list of hand-crafted scenarios>
+- **Replay tests**: <pass criteria for 30-day replay>
+- **Live observation criteria**: <what we'll watch for in `live_log` and `live_signal`>
+
+## 11. Promotion criteria
+
+| Gate | Required |
+|---|---|
+| `replay_only` → `live_log` | <numbers> |
+| `live_log` → `live_signal` | <numbers> |
+| `live_signal` → `live_full` | <numbers> |
+
+## 12. Kill criteria
+
+- <Number that triggers shutdown>
+- <...>

@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme — kept for toggle but dark is default */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;
+    --radius: 0.6rem;
+    --profit: 142 71% 45%;
+    --loss: 0 84% 60%;
+  }
+
+  .dark {
+    /* Dark theme — pleasant, not Bloomberg-terminal */
+    --background: 220 13% 8%;
+    --foreground: 210 20% 96%;
+    --card: 220 13% 11%;
+    --card-foreground: 210 20% 96%;
+    --muted: 220 13% 14%;
+    --muted-foreground: 220 9% 64%;
+    --accent: 220 13% 18%;
+    --accent-foreground: 210 20% 96%;
+    --primary: 210 20% 96%;
+    --primary-foreground: 220 13% 11%;
+    --border: 220 13% 18%;
+    --input: 220 13% 18%;
+    --ring: 217 91% 60%;
+    --profit: 142 65% 55%;
+    --loss: 0 75% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}

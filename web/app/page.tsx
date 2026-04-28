@@ -1,0 +1,56 @@
+/**
+ * Phase 0 placeholder. Phase 3 fleshes this into the real Overview page:
+ *   - Total paper P&L across sleeves (with and without realism haircut)
+ *   - Equity curve (last 30/90 days)
+ *   - Per-sleeve sparkline grid
+ *   - Top winners / top losers
+ *   - System health summary
+ */
+
+export default function OverviewPage() {
+  return (
+    <div className="space-y-8">
+      <section>
+        <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Platform booting. Strategies arrive in subsequent phases.
+        </p>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card label="Total P&L (after −22% haircut)" value="—" sub="awaiting first sleeve" />
+        <Card label="Active sleeves" value="0" sub="0 in live_full" />
+        <Card label="Trades today" value="0" sub="across all modes" />
+        <Card label="Ingestion lag" value="—" sub="pipes: not configured" />
+      </section>
+
+      <section className="rounded-lg border border-border/60 bg-card p-6">
+        <h2 className="text-sm font-medium text-muted-foreground">Status</h2>
+        <p className="mt-2 text-sm">
+          Phase 0 scaffolding is complete. The platform spec lives at{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-[12px]">DESIGN.md</code>{" "}
+          in the repo root.
+        </p>
+        <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+          <li>→ Phase 1: ingestion pipes + System Health</li>
+          <li>→ Phase 2: fill simulator + position tracker</li>
+          <li>→ Phase 3: dashboard pages + replay engine</li>
+          <li>→ Phase 4: strategy template + reference strategy</li>
+          <li>→ Phase 5+: strategies one-by-one with full rigor</li>
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+function Card({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-5">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{sub}</div>
+    </div>
+  );
+}

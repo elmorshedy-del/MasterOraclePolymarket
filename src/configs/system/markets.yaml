@@ -1,0 +1,9 @@
+# Which markets the platform subscribes to.
+
+top_n_by_volume: 1000
+
+always_on_categories:
+  - weather
+  - politics
+
+always_on_market_ids: []

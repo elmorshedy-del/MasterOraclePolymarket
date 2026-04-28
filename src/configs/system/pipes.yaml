@@ -1,0 +1,10 @@
+# Per-pipe enable flags. Pipes can be toggled without restart; the runner
+# starts/stops the affected venue adapter on change.
+
+polymarket_clob: true
+polymarket_activity: true
+news_rss: true
+reddit: false           # enable once Reddit credentials are configured
+kalshi: false           # enable once Kalshi adapter is implemented
+deribit: false          # enable once Deribit adapter is implemented
+binance_perp: false     # enable once Binance perp adapter is implemented

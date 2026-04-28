@@ -1,0 +1,26 @@
+# System runtime config — see src/core/config.py:RuntimeConfig
+#
+# Hot-reloadable. Change values, save, the runner picks up the change on
+# next event tick. Major changes (fill_simulator swap) require restart.
+
+latency:
+  decision_ms: 250
+  code_path_ms: 250
+  network_buffer_ms: 1000
+
+haircut:
+  default: 0.22
+  overrides_by_edge_class:
+    pure_arb: 0.18
+    maker: 0.38
+    latency_sensitive: 0.28
+    slow: 0.15
+
+calibration:
+  enabled: false
+  sample_rate: 0.0
+  wallet_address: null
+  max_real_size_usd: 5
+
+fill_simulator: event_replay
+realism_haircut_display: true
