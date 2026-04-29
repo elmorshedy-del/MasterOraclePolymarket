@@ -1,0 +1,21 @@
+sleeve_id: cross_outcome_arb__default
+strategy: cross_outcome_arb
+config_id: default
+edge_class: pure_arb
+enabled: true
+mode: replay_only                    # promote to live_log after synthetic + replay tests pass
+starting_capital_usd: 5000
+
+params:
+  min_edge_bps: 100
+  max_sum_threshold: "0.99"
+  max_size_per_leg_usd: "200"
+  price_buffer_bps: 50
+  max_concurrent_positions: 25
+
+market_filter:
+  categories: []                     # all categories — pure-math edge applies everywhere
+
+max_concurrent_positions: 25
+max_exposure_per_market_usd: 500
+loss_management: none

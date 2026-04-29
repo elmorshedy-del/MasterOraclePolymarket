@@ -1,0 +1,11 @@
+name: aggressive
+description: |
+  Looser threshold (50bps), bigger size, more concurrent positions.
+  Tests how much edge survives at the long tail of opportunities.
+
+params:
+  min_edge_bps: 50                   # require ≥0.50% gross edge — many more signals
+  max_sum_threshold: "0.995"
+  max_size_per_leg_usd: "500"
+  price_buffer_bps: 100              # 1.00¢ above ask — willing to pay more for fill
+  max_concurrent_positions: 50

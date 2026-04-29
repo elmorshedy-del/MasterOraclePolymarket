@@ -2,6 +2,7 @@
 
 import { use } from "react";
 
+import { PromotionPanel } from "@/components/PromotionPanel";
 import { useApi } from "@/lib/api";
 import { cn, formatUsd } from "@/lib/utils";
 
@@ -75,6 +76,10 @@ export default function SleeveDetailPage({ params }: { params: Promise<{ id: str
       <section>
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">Equity curve (30d)</h2>
         <EquityChart points={points} />
+      </section>
+
+      <section>
+        <PromotionPanel sleeveId={id} />
       </section>
 
       <section>

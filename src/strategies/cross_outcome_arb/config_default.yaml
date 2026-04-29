@@ -1,0 +1,11 @@
+name: default
+description: |
+  Balanced settings — medium edge, medium size, conservative caps.
+  Suitable for the first replay validation pass.
+
+params:
+  min_edge_bps: 100                  # require ≥1.00% gross edge
+  max_sum_threshold: "0.99"
+  max_size_per_leg_usd: "200"
+  price_buffer_bps: 50               # 0.50¢ above ask
+  max_concurrent_positions: 25

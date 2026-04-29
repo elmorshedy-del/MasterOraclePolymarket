@@ -1,0 +1,11 @@
+name: conservative
+description: |
+  High-conviction-only. Requires meaningful edge (≥2.00%), small size,
+  tight concurrency. Lowest risk profile.
+
+params:
+  min_edge_bps: 200                  # require ≥2.00% gross edge
+  max_sum_threshold: "0.97"
+  max_size_per_leg_usd: "100"
+  price_buffer_bps: 25               # 0.25¢ above ask only
+  max_concurrent_positions: 10

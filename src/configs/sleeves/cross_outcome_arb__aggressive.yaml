@@ -1,0 +1,21 @@
+sleeve_id: cross_outcome_arb__aggressive
+strategy: cross_outcome_arb
+config_id: aggressive
+edge_class: pure_arb
+enabled: false                       # off by default; flip on after default proves out
+mode: replay_only
+starting_capital_usd: 5000
+
+params:
+  min_edge_bps: 50
+  max_sum_threshold: "0.995"
+  max_size_per_leg_usd: "500"
+  price_buffer_bps: 100
+  max_concurrent_positions: 50
+
+market_filter:
+  categories: []
+
+max_concurrent_positions: 50
+max_exposure_per_market_usd: 1200
+loss_management: none

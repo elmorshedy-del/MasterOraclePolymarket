@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from src.analytics.metric_service import MetricService
 from src.analytics.tag_service import _row_to_trade
 from src.db.connection import get_pool
+from src.runner.promotion_gates import PromotionEvaluator
 from src.runner.replay_engine import ReplayEngine, ReplayOverrides
 from src.runner.replay_queue import ReplayJob, get_queue
 from src.venues._orderbook_store import STORE
@@ -498,6 +499,23 @@ def _job_to_dict(job: ReplayJob) -> dict[str, Any]:
             }
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Promotion gates
+# ---------------------------------------------------------------------------
+
+
+@app.get("/promotion/check")
+async def promotion_check(sleeve_id: str) -> dict[str, Any]:
+    """Evaluate promotion gates for a sleeve.
+
+    Returns the current mode, the next-mode candidate, per-criterion pass/fail,
+    and kill-criteria status (when current_mode is live_full).
+    """
+    evaluator = PromotionEvaluator()
+    result = await evaluator.evaluate(sleeve_id)
+    return result.as_dict()
 
 
 @app.get("/system/markets/count")

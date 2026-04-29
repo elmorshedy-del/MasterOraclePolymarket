@@ -58,7 +58,8 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["tests", "src/strategies"]
+python_files = ["test_*.py"]
 
 [tool.mypy]
 python_version = "3.11"

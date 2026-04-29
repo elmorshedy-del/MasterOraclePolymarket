@@ -1,0 +1,21 @@
+sleeve_id: cross_outcome_arb__conservative
+strategy: cross_outcome_arb
+config_id: conservative
+edge_class: pure_arb
+enabled: false
+mode: replay_only
+starting_capital_usd: 5000
+
+params:
+  min_edge_bps: 200
+  max_sum_threshold: "0.97"
+  max_size_per_leg_usd: "100"
+  price_buffer_bps: 25
+  max_concurrent_positions: 10
+
+market_filter:
+  categories: []
+
+max_concurrent_positions: 10
+max_exposure_per_market_usd: 250
+loss_management: none
