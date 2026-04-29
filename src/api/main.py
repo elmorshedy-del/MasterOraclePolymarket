@@ -1,38 +1,50 @@
 """FastAPI surface for the dashboard.
 
-Phase 2 endpoints:
-  - GET /health
-  - GET /version
-  - GET /system/health
-  - GET /system/markets/count
-  - GET /system/orderbooks/sample
-  - GET /system/sleeves         — list all configured sleeves with mode + capital
-  - GET /system/positions       — open positions across sleeves
-  - GET /system/recent_fills    — last N paper fills
-  - GET /system/recent_trades   — last N paper trades
-  - GET /system/sleeve_pnl      — equity-curve points for one or all sleeves
+Phase 3 endpoints:
+  - System / health (Phase 1+2)
+  - GET /system/sleeves, /system/positions, /system/recent_fills, /system/recent_trades, /system/sleeve_pnl
+  - GET /analytics/pivot          — group-by P&L heatmap data
+  - GET /analytics/sleeve_metrics — full metric scorecard for a sleeve
+  - GET /analytics/failure_modes  — losers grouped by failure category
+  - GET /analytics/strategies     — strategies known to the runner (for Strategy Lab)
+  - POST /replay/run              — submit a replay job
+  - GET  /replay/jobs             — list jobs
+  - GET  /replay/jobs/{id}        — status + result for a single job
+  - GET  /replay/runs             — completed replay runs (from DB)
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
+from uuid import UUID, uuid4
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
+from src.analytics.metric_service import MetricService
+from src.analytics.tag_service import _row_to_trade
 from src.db.connection import get_pool
+from src.runner.replay_engine import ReplayEngine, ReplayOverrides
+from src.runner.replay_queue import ReplayJob, get_queue
 from src.venues._orderbook_store import STORE
 
-app = FastAPI(title="Master Paper Trade Lab API", version="0.2.0")
+app = FastAPI(title="Master Paper Trade Lab API", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Health / system
+# ---------------------------------------------------------------------------
 
 
 @app.get("/health")
@@ -42,33 +54,40 @@ async def health() -> dict[str, str]:
 
 @app.get("/version")
 async def version() -> dict[str, str]:
-    return {"version": "0.2.0", "phase": "2"}
+    return {"version": "0.3.0", "phase": "3"}
+
+
+@app.on_event("startup")
+async def _on_startup() -> None:
+    await get_queue().start()
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    await get_queue().stop()
 
 
 @app.get("/system/health")
 async def system_health() -> dict[str, object]:
     db_status = "unknown"
     db_now: str | None = None
-    event_count_recent: int | None = None
-    fills_recent: int | None = None
-    trades_recent: int | None = None
-    open_positions: int | None = None
+    metrics: dict[str, Any] = {}
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow("SELECT now() AS now")
             db_now = row["now"].isoformat() if row else None
             db_status = "ok"
-            event_count_recent = await conn.fetchval(
+            metrics["events_last_5min"] = await conn.fetchval(
                 "SELECT count(*) FROM market_events WHERE ts > now() - interval '5 minutes'"
             )
-            fills_recent = await conn.fetchval(
+            metrics["fills_last_1h"] = await conn.fetchval(
                 "SELECT count(*) FROM paper_fills WHERE ts_filled > now() - interval '1 hour'"
             )
-            trades_recent = await conn.fetchval(
+            metrics["trades_last_1h"] = await conn.fetchval(
                 "SELECT count(*) FROM paper_trades WHERE entry_ts > now() - interval '1 hour'"
             )
-            open_positions = await conn.fetchval(
+            metrics["open_positions"] = await conn.fetchval(
                 "SELECT count(*) FROM paper_positions WHERE size > 0"
             )
     except Exception as exc:  # noqa: BLE001
@@ -76,14 +95,7 @@ async def system_health() -> dict[str, object]:
 
     return {
         "checked_at": datetime.now(tz=timezone.utc).isoformat(),
-        "db": {
-            "status": db_status,
-            "server_time": db_now,
-            "events_last_5min": event_count_recent,
-            "fills_last_1h": fills_recent,
-            "trades_last_1h": trades_recent,
-            "open_positions": open_positions,
-        },
+        "db": {"status": db_status, "server_time": db_now, **metrics},
         "orderbooks": {
             "markets_in_memory": STORE.market_count(),
             "asset_books_in_memory": STORE.asset_count(),
@@ -101,8 +113,7 @@ async def list_sleeves() -> dict[str, list[dict[str, Any]]]:
             rows = await conn.fetch(
                 """
                 SELECT s.sleeve_id, s.strategy_name, s.config_id, s.edge_class,
-                       s.starting_capital_usd, s.mode, s.enabled, s.config_hash,
-                       s.started_at,
+                       s.starting_capital_usd, s.mode, s.enabled, s.config_hash, s.started_at,
                        COALESCE(p.realized_pnl_usd, 0) AS realized_pnl_usd,
                        COALESCE(p.unrealized_pnl_usd, 0) AS unrealized_pnl_usd,
                        COALESCE(p.capital_remaining, s.starting_capital_usd) AS capital_remaining,
@@ -128,21 +139,12 @@ async def list_positions(sleeve_id: str | None = None) -> dict[str, list[dict[st
         async with pool.acquire() as conn:
             if sleeve_id:
                 rows = await conn.fetch(
-                    """
-                    SELECT * FROM paper_positions
-                    WHERE sleeve_id = $1 AND size > 0
-                    ORDER BY opened_at DESC
-                    """,
+                    "SELECT * FROM paper_positions WHERE sleeve_id = $1 AND size > 0 ORDER BY opened_at DESC",
                     sleeve_id,
                 )
             else:
                 rows = await conn.fetch(
-                    """
-                    SELECT * FROM paper_positions
-                    WHERE size > 0
-                    ORDER BY opened_at DESC
-                    LIMIT 200
-                    """
+                    "SELECT * FROM paper_positions WHERE size > 0 ORDER BY opened_at DESC LIMIT 200"
                 )
             return {"positions": [dict(r) for r in rows]}
     except Exception:  # noqa: BLE001
@@ -158,9 +160,7 @@ async def recent_fills(limit: int = Query(50, le=500)) -> dict[str, list[dict[st
                 """
                 SELECT fill_id, sleeve_id, market_id, asset_id, side, price, size,
                        fill_type, ts_filled, realism_flag
-                FROM paper_fills
-                ORDER BY ts_filled DESC
-                LIMIT $1
+                FROM paper_fills ORDER BY ts_filled DESC LIMIT $1
                 """,
                 limit,
             )
@@ -170,22 +170,38 @@ async def recent_fills(limit: int = Query(50, le=500)) -> dict[str, list[dict[st
 
 
 @app.get("/system/recent_trades")
-async def recent_trades(limit: int = Query(50, le=500)) -> dict[str, list[dict[str, Any]]]:
+async def recent_trades(
+    limit: int = Query(50, le=500),
+    sleeve_id: str | None = None,
+    source: str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
+            params: list[Any] = []
+            wheres: list[str] = []
+            if sleeve_id:
+                params.append(sleeve_id)
+                wheres.append(f"sleeve_id = ${len(params)}")
+            if source:
+                params.append(source)
+                wheres.append(f"source = ${len(params)}")
+            where_clause = "WHERE " + " AND ".join(wheres) if wheres else ""
+            params.append(limit)
             rows = await conn.fetch(
-                """
+                f"""
                 SELECT trade_id, sleeve_id, strategy_name, config_id,
                        market_id, asset_id, side,
                        entry_price, exit_price, entry_size,
                        entry_ts, exit_ts,
-                       pnl_usd, pnl_after_haircut_usd, realism_flag, fill_type, source
-                FROM paper_trades
-                ORDER BY entry_ts DESC
-                LIMIT $1
+                       pnl_usd, pnl_after_haircut_usd, realism_flag, fill_type, source,
+                       market_category, market_subcategory, liquidity_bucket, entry_price_bucket,
+                       time_to_resolution_bucket, orderbook_state_bucket, time_of_day_bucket,
+                       day_of_week, news_regime, counterparty_estimate
+                FROM paper_trades {where_clause}
+                ORDER BY entry_ts DESC LIMIT ${len(params)}
                 """,
-                limit,
+                *params,
             )
             return {"trades": [dict(r) for r in rows]}
     except Exception:  # noqa: BLE001
@@ -203,26 +219,285 @@ async def sleeve_pnl(
             since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
             if sleeve_id:
                 rows = await conn.fetch(
-                    """
-                    SELECT * FROM sleeve_pnl_snapshots
-                    WHERE sleeve_id = $1 AND ts >= $2
-                    ORDER BY ts ASC
-                    """,
+                    "SELECT * FROM sleeve_pnl_snapshots WHERE sleeve_id = $1 AND ts >= $2 ORDER BY ts ASC",
                     sleeve_id,
                     since,
                 )
             else:
                 rows = await conn.fetch(
-                    """
-                    SELECT * FROM sleeve_pnl_snapshots
-                    WHERE ts >= $1
-                    ORDER BY sleeve_id, ts ASC
-                    """,
+                    "SELECT * FROM sleeve_pnl_snapshots WHERE ts >= $1 ORDER BY sleeve_id, ts ASC",
                     since,
                 )
             return {"points": [dict(r) for r in rows]}
     except Exception:  # noqa: BLE001
         return {"points": []}
+
+
+# ---------------------------------------------------------------------------
+# Analytics
+# ---------------------------------------------------------------------------
+
+
+_PIVOT_COLUMNS = {
+    "strategy_name", "config_id", "market_category", "market_subcategory",
+    "liquidity_bucket", "entry_price_bucket", "time_to_resolution_bucket",
+    "orderbook_state_bucket", "time_of_day_bucket", "day_of_week",
+    "news_regime", "counterparty_estimate", "fill_type", "realism_flag", "source",
+}
+
+
+@app.get("/analytics/pivot")
+async def analytics_pivot(
+    row: str = Query("strategy_name"),
+    col: str = Query("market_category"),
+    metric: str = Query("total_pnl"),
+    hours: int = Query(168, ge=1, le=24 * 365),
+) -> dict[str, Any]:
+    """Group-by aggregation over paper_trades.
+
+    Returns a list of cells: ``[{row_key, col_key, total_pnl, trade_count, win_rate, avg_pnl}]``
+    The frontend renders these as a heatmap.
+    """
+    if row not in _PIVOT_COLUMNS or col not in _PIVOT_COLUMNS:
+        raise HTTPException(400, "row/col must be one of the supported tag columns")
+    metric = metric if metric in {"total_pnl", "trade_count", "win_rate", "avg_pnl"} else "total_pnl"
+
+    try:
+        pool = await get_pool()
+    except RuntimeError:
+        return {"row_dim": row, "col_dim": col, "metric": metric, "cells": []}
+
+    since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""
+            SELECT
+                {row} AS row_key,
+                {col} AS col_key,
+                COALESCE(SUM(pnl_after_haircut_usd), 0)::float AS total_pnl,
+                COUNT(*) AS trade_count,
+                AVG(CASE WHEN pnl_after_haircut_usd > 0 THEN 1.0 ELSE 0.0 END)::float AS win_rate,
+                AVG(pnl_after_haircut_usd)::float AS avg_pnl
+            FROM paper_trades
+            WHERE entry_ts >= $1
+            GROUP BY {row}, {col}
+            ORDER BY {row}, {col}
+            """,
+            since,
+        )
+        return {
+            "row_dim": row,
+            "col_dim": col,
+            "metric": metric,
+            "since": since.isoformat(),
+            "cells": [dict(r) for r in rows],
+        }
+
+
+@app.get("/analytics/sleeve_metrics")
+async def sleeve_metrics(sleeve_id: str) -> dict[str, Any]:
+    try:
+        pool = await get_pool()
+    except RuntimeError:
+        return {"sleeve_id": sleeve_id, "metrics": {}, "trade_count": 0}
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT trade_id, sleeve_id, strategy_name, config_id, market_id, asset_id, side,
+                   entry_price, entry_size, entry_ts,
+                   exit_price, exit_size, exit_ts,
+                   pnl_usd, pnl_after_haircut_usd, realism_flag, fill_type, tags_extra
+            FROM paper_trades WHERE sleeve_id = $1
+            """,
+            sleeve_id,
+        )
+
+    trades = [_row_to_trade(r) for r in rows]
+    metrics = MetricService().compute_all(trades)
+    return {"sleeve_id": sleeve_id, "trade_count": len(trades), "metrics": metrics}
+
+
+@app.get("/analytics/failure_modes")
+async def failure_modes(
+    sleeve_id: str | None = None,
+    hours: int = Query(168, ge=1, le=24 * 365),
+) -> dict[str, Any]:
+    """Breakdown of LOSING trades by failure category.
+
+    V1 categories:
+      - implausible: realism_flag = 'implausible'
+      - picked_off: realism_flag = 'picked_off'
+      - thin_market: realism_flag = 'thin_market'
+      - moved_market: realism_flag = 'would_have_moved_market'
+      - missed_fill: fill_type = 'missed'
+      - regular_loss: clean fills that just lost
+    """
+    try:
+        pool = await get_pool()
+    except RuntimeError:
+        return {"buckets": []}
+
+    since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+    async with pool.acquire() as conn:
+        params: list[Any] = [since]
+        sleeve_clause = ""
+        if sleeve_id:
+            params.append(sleeve_id)
+            sleeve_clause = f"AND sleeve_id = ${len(params)}"
+        rows = await conn.fetch(
+            f"""
+            SELECT
+                CASE
+                    WHEN realism_flag = 'implausible' THEN 'implausible'
+                    WHEN realism_flag = 'picked_off' THEN 'picked_off'
+                    WHEN realism_flag = 'thin_market' THEN 'thin_market'
+                    WHEN realism_flag = 'would_have_moved_market' THEN 'moved_market'
+                    WHEN fill_type = 'missed' THEN 'missed_fill'
+                    ELSE 'regular_loss'
+                END AS bucket,
+                COUNT(*) AS trade_count,
+                COALESCE(SUM(pnl_after_haircut_usd), 0)::float AS total_pnl,
+                COALESCE(AVG(pnl_after_haircut_usd), 0)::float AS avg_pnl
+            FROM paper_trades
+            WHERE entry_ts >= $1
+              AND pnl_after_haircut_usd < 0
+              {sleeve_clause}
+            GROUP BY bucket
+            ORDER BY total_pnl ASC
+            """,
+            *params,
+        )
+        return {"buckets": [dict(r) for r in rows]}
+
+
+@app.get("/analytics/strategies")
+async def list_strategies() -> dict[str, list[dict[str, Any]]]:
+    """Strategies discovered by the plugin loader — for Strategy Lab dropdowns."""
+    from pathlib import Path
+    from src.core import plugin_loader
+    plugins = plugin_loader.discover_all(Path(__file__).resolve().parents[2])
+    return {
+        "strategies": [
+            {
+                "name": p.name,
+                "edge_class": getattr(p.instance, "edge_class", None),
+                "module_path": str(p.module_path),
+            }
+            for p in plugins
+            if p.kind == "strategy"
+        ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Replay
+# ---------------------------------------------------------------------------
+
+
+class ReplayRequest(BaseModel):
+    strategy_name: str
+    config_id: str = "default"
+    days: int | None = Field(default=30, ge=1, le=365)
+    range_start: datetime | None = None
+    range_end: datetime | None = None
+    starting_capital: float = 5000.0
+    edge_class: str | None = None
+    overrides: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/replay/run")
+async def replay_run(req: ReplayRequest) -> dict[str, Any]:
+    queue = get_queue()
+    range_end = req.range_end or datetime.now(tz=timezone.utc)
+    range_start = req.range_start or (range_end - timedelta(days=req.days or 30))
+
+    overrides = ReplayOverrides()
+    if "latency_ms" in req.overrides:
+        overrides.latency_ms = int(req.overrides["latency_ms"])
+    if "size_multiplier" in req.overrides:
+        overrides.size_multiplier = Decimal(str(req.overrides["size_multiplier"]))
+    if "haircut_override" in req.overrides:
+        overrides.haircut_override = Decimal(str(req.overrides["haircut_override"]))
+    if "market_filter" in req.overrides:
+        mf = req.overrides["market_filter"]
+        if isinstance(mf, list):
+            overrides.market_filter = [str(x) for x in mf]
+
+    job = ReplayJob(
+        job_id=uuid4(),
+        strategy_name=req.strategy_name,
+        config_id=req.config_id,
+        range_start=range_start,
+        range_end=range_end,
+        starting_capital=Decimal(str(req.starting_capital)),
+        edge_class=req.edge_class,
+        overrides=overrides,
+    )
+    queue.submit(job)
+    return _job_to_dict(job)
+
+
+@app.get("/replay/jobs")
+async def list_replay_jobs(limit: int = Query(50, le=200)) -> dict[str, list[dict[str, Any]]]:
+    return {"jobs": [_job_to_dict(j) for j in get_queue().list(limit=limit)]}
+
+
+@app.get("/replay/jobs/{job_id}")
+async def get_replay_job(job_id: UUID) -> dict[str, Any]:
+    job = get_queue().get(job_id)
+    if job is None:
+        raise HTTPException(404, "job not found")
+    return _job_to_dict(job)
+
+
+@app.get("/replay/runs")
+async def list_replay_runs(limit: int = Query(50, le=500)) -> dict[str, list[dict[str, Any]]]:
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT run_id, sleeve_id, strategy_name, config_id, range_start, range_end,
+                       started_at, finished_at, status, summary
+                FROM replay_runs
+                ORDER BY started_at DESC LIMIT $1
+                """,
+                limit,
+            )
+            return {"runs": [dict(r) for r in rows]}
+    except Exception:  # noqa: BLE001
+        return {"runs": []}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _job_to_dict(job: ReplayJob) -> dict[str, Any]:
+    return {
+        "job_id": str(job.job_id),
+        "strategy_name": job.strategy_name,
+        "config_id": job.config_id,
+        "status": job.status,
+        "submitted_at": job.submitted_at.isoformat(),
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+        "range_start": job.range_start.isoformat() if job.range_start else None,
+        "range_end": job.range_end.isoformat() if job.range_end else None,
+        "error": job.error,
+        "result": (
+            None if job.result is None else {
+                "run_id": str(job.result.run_id),
+                "signals": job.result.signals,
+                "fills": job.result.fills,
+                "trades": job.result.trades,
+                "realized_pnl": str(job.result.realized_pnl),
+                "metrics": job.result.metrics,
+            }
+        ),
+    }
 
 
 @app.get("/system/markets/count")

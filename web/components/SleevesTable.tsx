@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import useSWR from "swr";
 
-import { cn, formatUsd } from "@/lib/utils";
+import { cn, fetcher, formatUsd } from "@/lib/utils";
 
 type Sleeve = {
   sleeve_id: string;
@@ -18,8 +19,6 @@ type Sleeve = {
   open_positions: number;
 };
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
 const MODE_COLOR: Record<string, string> = {
   live_full: "bg-profit/20 text-profit",
   live_signal: "bg-sky-500/20 text-sky-400",
@@ -34,21 +33,14 @@ export function SleevesTable() {
     { refreshInterval: 10_000 },
   );
 
-  if (isLoading) {
-    return <div className="text-sm text-muted-foreground">Loading sleeves…</div>;
-  }
-  if (error) {
-    return <div className="text-sm text-loss">Could not load sleeves.</div>;
-  }
+  if (isLoading) return <div className="text-sm text-muted-foreground">Loading sleeves…</div>;
+  if (error) return <div className="text-sm text-loss">Could not load sleeves.</div>;
   const sleeves = data?.sleeves ?? [];
   if (sleeves.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
         No sleeves configured yet. Drop a YAML in{" "}
-        <code className="rounded bg-muted px-1.5 py-0.5 text-[12px]">
-          src/configs/sleeves/
-        </code>
-        .
+        <code className="rounded bg-muted px-1.5 py-0.5 text-[12px]">src/configs/sleeves/</code>.
       </div>
     );
   }
@@ -72,22 +64,21 @@ export function SleevesTable() {
             const pnl = Number(s.realized_pnl_usd ?? 0);
             const pnlClass = pnl > 0 ? "text-profit" : pnl < 0 ? "text-loss" : "text-foreground";
             return (
-              <tr
-                key={s.sleeve_id}
-                className="border-t border-border/40 hover:bg-muted/20"
-              >
-                <td className="px-4 py-3 font-mono text-[13px]">{s.sleeve_id}</td>
+              <tr key={s.sleeve_id} className="border-t border-border/40 hover:bg-muted/20">
+                <td className="px-4 py-3 font-mono text-[13px]">
+                  <Link href={`/sleeves/${encodeURIComponent(s.sleeve_id)}`} className="hover:underline">
+                    {s.sleeve_id}
+                  </Link>
+                </td>
                 <td className="px-4 py-3">
                   <div>{s.strategy_name}</div>
                   <div className="text-xs text-muted-foreground">{s.config_id}</div>
                 </td>
                 <td className="px-4 py-3">
-                  <span
-                    className={cn(
-                      "rounded px-2 py-0.5 text-[11px] font-medium",
-                      MODE_COLOR[s.mode] ?? "bg-muted text-muted-foreground",
-                    )}
-                  >
+                  <span className={cn(
+                    "rounded px-2 py-0.5 text-[11px] font-medium",
+                    MODE_COLOR[s.mode] ?? "bg-muted text-muted-foreground",
+                  )}>
                     {s.mode}
                   </span>
                 </td>

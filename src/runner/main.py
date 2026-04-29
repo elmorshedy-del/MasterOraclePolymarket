@@ -1,26 +1,8 @@
 """Main async event loop.
 
-Phase 2: full pipeline online.
+Phase 3: tag application wired into the Trade-emission path.
 
-Boot sequence:
-  1. Load configs (system + sleeves), discover plugins.
-  2. Init DB pool, start EventWriter.
-  3. Filter venues by ``pipes.yaml`` enable flags.
-  4. Bootstrap Polymarket markets (markets poller runs once before CLOB
-     subscribes so the CLOB has an asset_id list).
-  5. Start each enabled venue, multiplex its events into the bus.
-  6. Build StrategyRunners from sleeve configs (only enabled ones).
-  7. Pick a FillSimulator (event_replay or calibrated, per runtime.yaml).
-  8. Start PositionTracker, FillValidator, PnLSnapshotter.
-  9. Per event:
-       - persist via EventWriter (always)
-       - update orderbook (the venue did this already in normalize)
-       - feed to fill simulator on_event() → any new fills?
-       - feed to all strategy runners → any new signals?
-       - for each signal: build Order, persist, submit() → fills
-       - for each fill: persist, route through PositionTracker
-       - for each Trade: persist
- 10. Run forever; gracefully shut down on SIGINT/SIGTERM.
+Boot sequence (same as Phase 2 plus tag service init).
 """
 
 from __future__ import annotations
@@ -28,32 +10,28 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from src.analytics.tag_service import TagService
 from src.core import config as cfg
 from src.core import plugin_loader
 from src.core.events import (
-    EventType,
     MarketEvent,
     Order,
-    OrderType,
     RuntimeMode,
-    Side,
     Signal,
 )
 from src.core.interfaces import FillSimulator, MarketDataSource
 from src.db.connection import close_pool, get_pool
 from src.db.event_writer import EventWriter
 from src.db import writers as db_writers
-from src.execution.event_replay import EventReplayFillSimulator
 from src.execution.calibrated import CalibratedFillSimulator
-from src.execution.position_tracker import PositionTracker
+from src.execution.event_replay import EventReplayFillSimulator
 from src.execution.pnl_snapshotter import PnLSnapshotter
+from src.execution.position_tracker import PositionTracker
 from src.execution.validation import FillValidator
 from src.runner.aggregator import Aggregator
 from src.runner.retention import Retention
@@ -80,21 +58,21 @@ class Runner:
         self.fill_simulator: FillSimulator | None = None
         self.position_tracker: PositionTracker | None = None
         self.pnl_snapshotter: PnLSnapshotter | None = None
+        self.tag_service: TagService | None = None
         self.strategy_runners: list[StrategyRunner] = []
 
         self._tasks: list[asyncio.Task[Any]] = []
         self._stop = asyncio.Event()
         self._db_available: bool = False
 
-        # Telemetry
         self.events_seen: int = 0
         self.signals_emitted: int = 0
         self.fills_simulated: int = 0
         self.trades_emitted: int = 0
 
-    # --------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Lifecycle
-    # --------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
 
     async def start(self) -> None:
         await self._load_configs_and_plugins()
@@ -133,9 +111,9 @@ class Runner:
     async def run_forever(self) -> None:
         await self._stop.wait()
 
-    # --------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Init steps
-    # --------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
 
     async def _load_configs_and_plugins(self) -> None:
         self.system_cfg = cfg.load_system_config(REPO_ROOT / "src" / "configs" / "system")
@@ -144,13 +122,15 @@ class Runner:
         self._plugins = plugin_loader.discover_all(REPO_ROOT)
         self._venue_plugins = {p.name: p.instance for p in self._plugins if p.kind == "venue"}
         self._strategy_plugins = {p.name: p.instance for p in self._plugins if p.kind == "strategy"}
+        self.tag_service = TagService()
 
         logger.info(
-            "boot summary | runtime_hash=%s sleeves=%d venues=%d strategies=%d",
+            "boot summary | runtime_hash=%s sleeves=%d venues=%d strategies=%d tags=%d",
             self.system_cfg.config_hash,
             len(self.sleeves),
             len(self._venue_plugins),
             len(self._strategy_plugins),
+            len(self.tag_service.tag_names),
         )
 
     async def _init_db_layer(self) -> None:
@@ -166,7 +146,6 @@ class Runner:
     async def _init_execution_layer(self) -> None:
         assert self.system_cfg is not None
 
-        # Choose simulator
         sim_name = self.system_cfg.runtime.fill_simulator
         if sim_name == "calibrated":
             self.fill_simulator = CalibratedFillSimulator(
@@ -179,7 +158,6 @@ class Runner:
             )
         logger.info("fill simulator: %s", self.fill_simulator.name)
 
-        # Position tracker
         edge_class_by_sleeve = {
             ls.sleeve.sleeve_id: ls.sleeve.edge_class or ""
             for ls in self.sleeves
@@ -194,7 +172,6 @@ class Runner:
             edge_class_by_sleeve={k: v for k, v in edge_class_by_sleeve.items() if v},
         )
 
-        # Snapshotter + validator (need DB)
         if self._db_available:
             self.pnl_snapshotter = PnLSnapshotter(self.position_tracker)
         else:
@@ -217,7 +194,6 @@ class Runner:
                 StrategyRunner(sleeve=loaded_sleeve, strategy=strategy)
             )
 
-            # Persist sleeve row
             if self._db_available:
                 try:
                     await db_writers.upsert_sleeve(
@@ -257,7 +233,6 @@ class Runner:
 
         logger.info("enabled venues: %s", [v.name for v in self.venues])
 
-        # Bootstrap Polymarket markets before CLOB subscribes
         markets_venue = next((v for v in self.venues if v.name == "polymarket_markets"), None)
         clob_venue = next((v for v in self.venues if v.name == "polymarket_clob"), None)
         if markets_venue and clob_venue:
@@ -294,9 +269,9 @@ class Runner:
         for v in self.venues:
             self._tasks.append(asyncio.create_task(self._consume(v), name=f"consume-{v.name}"))
 
-    # --------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
     # Hot path
-    # --------------------------------------------------------------------------
+    # -----------------------------------------------------------------------
 
     async def _consume(self, venue: MarketDataSource) -> None:
         try:
@@ -309,14 +284,9 @@ class Runner:
 
     async def _on_event(self, event: MarketEvent) -> None:
         self.events_seen += 1
-
-        # 1. Persist (high-throughput path)
         self.event_writer.submit(event)
-
-        # 2. Update fill simulator's resting orders
         await self._tick_fill_simulator(event)
 
-        # 3. Dispatch to strategies
         for runner in self.strategy_runners:
             signals = await runner.on_event(event)
             for sig in signals:
@@ -331,29 +301,24 @@ class Runner:
         book = STORE.get(event.market_id, event.asset_id)
         if book is None:
             return
-
         try:
             fills = await self.fill_simulator.on_event(event, book)
         except Exception:  # noqa: BLE001
             logger.exception("fill_simulator.on_event raised for event %s", event.event_id)
             return
-
         for fill in fills:
             await self._handle_fill(fill)
 
     async def _handle_signal(self, signal: Signal, runner: StrategyRunner) -> None:
-        # Persist signal regardless of mode
         if self._db_available:
             try:
                 await db_writers.insert_signal(signal)
             except Exception:  # noqa: BLE001
                 logger.exception("failed to persist signal %s", signal.signal_id)
 
-        # In live_log mode we stop here — no execution
         if runner.mode == RuntimeMode.LIVE_LOG:
             return
 
-        # In live_signal and live_full we engage the fill simulator
         if self.fill_simulator is None or self.position_tracker is None:
             return
 
@@ -361,7 +326,6 @@ class Runner:
         if book is None:
             return
 
-        # Build Order with latency-injected ts_placed
         from src.execution._latency import apply_latency
         assert self.system_cfg is not None
         await apply_latency(self.system_cfg.runtime.latency)
@@ -388,7 +352,6 @@ class Runner:
             except Exception:  # noqa: BLE001
                 logger.exception("failed to persist order %s", order.order_id)
 
-        # Re-fetch the book post-latency
         book = STORE.get(signal.market_id, signal.asset_id) or book
 
         try:
@@ -413,16 +376,12 @@ class Runner:
             except Exception:  # noqa: BLE001
                 logger.exception("failed to persist fill %s", fill.fill_id)
 
-        # In live_signal mode we record the fill for stats but do NOT route it
-        # to the position tracker (no capital is committed).
         if runner is not None and runner.mode == RuntimeMode.LIVE_SIGNAL:
             return
 
         if self.position_tracker is None:
             return
 
-        # Look up the runner if not provided (fill came from on_event for a
-        # resting order placed earlier — find the runner whose sleeve owns it)
         if runner is None:
             runner = self._runner_for_sleeve(fill.sleeve_id)
 
@@ -439,11 +398,19 @@ class Runner:
             return
 
         self.trades_emitted += 1
+
         if self._db_available:
             try:
                 await db_writers.insert_trade(trade, runner.sleeve.config_hash)
             except Exception:  # noqa: BLE001
                 logger.exception("failed to persist trade %s", trade.trade_id)
+
+            # Apply tags + persist to denormalized columns + tags_extra
+            if self.tag_service is not None:
+                try:
+                    await self.tag_service.tag_and_persist(trade)
+                except Exception:  # noqa: BLE001
+                    logger.exception("tag_and_persist failed for trade %s", trade.trade_id)
 
     def _runner_for_sleeve(self, sleeve_id: str) -> StrategyRunner | None:
         for r in self.strategy_runners:
