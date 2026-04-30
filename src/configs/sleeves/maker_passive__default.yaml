@@ -1,0 +1,22 @@
+sleeve_id: maker_passive__default
+strategy: maker_passive
+config_id: default
+edge_class: maker
+enabled: true
+mode: replay_only
+starting_capital_usd: 5000
+
+params:
+  min_24h_volume_usd: 5000
+  target_notional_usd: "50"
+  tick_size: "0.01"
+  min_spread_ticks: 2
+  place_interval_secs: 60
+  max_concurrent_positions: 50
+
+market_filter:
+  categories: []
+
+max_concurrent_positions: 50
+max_exposure_per_market_usd: 100
+loss_management: none

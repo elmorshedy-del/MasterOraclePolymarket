@@ -1,0 +1,15 @@
+name: default
+description: |
+  Buy NO at $0.95-0.99 on weather-category markets. V1 heuristic — no
+  forecast integration yet.
+
+params:
+  min_price: "0.95"
+  max_price: "0.99"
+  target_notional_usd: "50"
+  price_buffer_bps: 50
+  recent_adverse_threshold: "0.02"
+  recent_window_secs: 300
+  max_concurrent_positions: 50
+  category_keywords:
+    - weather

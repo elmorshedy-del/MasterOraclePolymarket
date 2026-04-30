@@ -1,0 +1,11 @@
+name: aggressive
+description: |
+  Lower edge floor, bigger size, more concurrent positions.
+
+params:
+  min_legs: 2
+  min_edge_bps: 100
+  max_sum_threshold: "0.99"
+  max_size_per_leg_usd: "300"
+  price_buffer_bps: 100
+  max_concurrent_positions: 25

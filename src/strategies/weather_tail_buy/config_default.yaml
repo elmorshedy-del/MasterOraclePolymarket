@@ -1,0 +1,14 @@
+name: default
+description: |
+  Buy YES at $0.01-0.05 on weather-category buckets. V1 heuristic.
+
+params:
+  min_price: "0.01"
+  max_price: "0.05"
+  target_notional_usd: "25"
+  price_buffer_bps: 100
+  recent_adverse_threshold: "0.005"
+  recent_window_secs: 600
+  max_concurrent_positions: 100
+  category_keywords:
+    - weather

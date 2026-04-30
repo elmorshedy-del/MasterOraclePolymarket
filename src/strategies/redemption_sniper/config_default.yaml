@@ -1,0 +1,13 @@
+name: default
+description: |
+  Snipe at $0.97-0.99 within the last hour before resolution.
+
+params:
+  time_to_resolution_window_secs: 3600
+  min_price: "0.97"
+  max_price: "0.99"
+  target_notional_usd: "200"
+  price_buffer_bps: 25
+  recent_adverse_threshold: "0.01"
+  recent_window_secs: 60
+  max_concurrent_positions: 25

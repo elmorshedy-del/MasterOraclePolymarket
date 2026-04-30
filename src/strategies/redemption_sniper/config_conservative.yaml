@@ -1,0 +1,13 @@
+name: conservative
+description: |
+  Tighter price band, smaller size, last 30 minutes only.
+
+params:
+  time_to_resolution_window_secs: 1800
+  min_price: "0.98"
+  max_price: "0.995"
+  target_notional_usd: "100"
+  price_buffer_bps: 10
+  recent_adverse_threshold: "0.005"
+  recent_window_secs: 120
+  max_concurrent_positions: 15

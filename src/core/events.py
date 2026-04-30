@@ -68,6 +68,7 @@ class EventType(str, Enum):
     BOOK_DELTA = "book_delta"
     TRADE_PRINT = "trade_print"
     TICK_SIZE_CHANGE = "tick_size_change"
+    MARKET_META = "market_meta"                # one-shot metadata event for a market
     MARKET_RESOLVED = "market_resolved"
     MARKET_PAUSED = "market_paused"
     ACTIVITY_TRADE = "activity_trade"          # public wallet trade observed via activity feed

@@ -1,0 +1,11 @@
+name: thick_only
+description: |
+  Only the very thickest markets, with bigger size and longer cooldown.
+
+params:
+  min_24h_volume_usd: 50000
+  target_notional_usd: "200"
+  tick_size: "0.01"
+  min_spread_ticks: 3
+  place_interval_secs: 180
+  max_concurrent_positions: 20

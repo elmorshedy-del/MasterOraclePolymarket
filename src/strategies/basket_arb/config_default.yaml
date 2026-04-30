@@ -1,0 +1,11 @@
+name: default
+description: |
+  Conservative basket-arb: 3+ legs, ≥2% edge, $100/leg.
+
+params:
+  min_legs: 3
+  min_edge_bps: 200
+  max_sum_threshold: "0.98"
+  max_size_per_leg_usd: "100"
+  price_buffer_bps: 50
+  max_concurrent_positions: 10

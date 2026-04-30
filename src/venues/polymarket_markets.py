@@ -76,7 +76,29 @@ class PolymarketMarkets:
                 markets = await self._fetch_markets()
                 self.last_poll_at = datetime.now(tz=timezone.utc)
                 for meta in markets:
+                    is_new = meta.market_id not in self._known_meta
                     self._known_meta[meta.market_id] = meta
+
+                    # Emit MARKET_META on first observation so strategies can
+                    # cache category / end_time / volume_24h / asset_ids.
+                    if is_new:
+                        for asset_id in meta.asset_ids:
+                            yield MarketEvent.make(
+                                event_type=EventType.MARKET_META,
+                                venue=VENUE,
+                                payload={
+                                    "title": meta.title,
+                                    "category": meta.category,
+                                    "subcategory": meta.subcategory,
+                                    "end_time": meta.end_time.isoformat() if meta.end_time else None,
+                                    "tick_size": str(meta.tick_size),
+                                    "asset_ids": list(meta.asset_ids),
+                                    "tags_extra": meta.tags_extra,
+                                },
+                                market_id=meta.market_id,
+                                asset_id=asset_id,
+                                ts=datetime.now(tz=timezone.utc),
+                            )
 
                     # Resolution detection — fire MARKET_RESOLVED once
                     is_resolved = bool(meta.tags_extra.get("resolved"))

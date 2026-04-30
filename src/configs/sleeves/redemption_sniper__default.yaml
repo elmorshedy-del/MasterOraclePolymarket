@@ -1,0 +1,24 @@
+sleeve_id: redemption_sniper__default
+strategy: redemption_sniper
+config_id: default
+edge_class: slow
+enabled: true
+mode: replay_only
+starting_capital_usd: 5000
+
+params:
+  time_to_resolution_window_secs: 3600
+  min_price: "0.97"
+  max_price: "0.99"
+  target_notional_usd: "200"
+  price_buffer_bps: 25
+  recent_adverse_threshold: "0.01"
+  recent_window_secs: 60
+  max_concurrent_positions: 25
+
+market_filter:
+  categories: []
+
+max_concurrent_positions: 25
+max_exposure_per_market_usd: 200
+loss_management: none

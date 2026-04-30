@@ -1,0 +1,26 @@
+sleeve_id: weather_tail_sell__default
+strategy: weather_tail_sell
+config_id: default
+edge_class: tail
+enabled: true
+mode: replay_only
+starting_capital_usd: 5000
+
+params:
+  min_price: "0.95"
+  max_price: "0.99"
+  target_notional_usd: "50"
+  price_buffer_bps: 50
+  recent_adverse_threshold: "0.02"
+  recent_window_secs: 300
+  max_concurrent_positions: 50
+  category_keywords:
+    - weather
+
+market_filter:
+  categories:
+    - weather
+
+max_concurrent_positions: 50
+max_exposure_per_market_usd: 50
+loss_management: none
