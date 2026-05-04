@@ -60,6 +60,9 @@ class HaircutConfig(BaseModel):
             "maker": Decimal("0.38"),
             "latency_sensitive": Decimal("0.28"),
             "slow": Decimal("0.15"),
+            "tail": Decimal("0.25"),
+            "copy": Decimal("0.20"),
+            "directional": Decimal("0.22"),
         }
     )
 

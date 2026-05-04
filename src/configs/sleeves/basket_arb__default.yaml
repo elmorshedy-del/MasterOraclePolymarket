@@ -1,0 +1,22 @@
+sleeve_id: basket_arb__default
+strategy: basket_arb
+config_id: default
+edge_class: pure_arb
+enabled: true
+mode: replay_only
+starting_capital_usd: 5000
+
+params:
+  min_legs: 3
+  min_edge_bps: 200
+  max_sum_threshold: "0.98"
+  max_size_per_leg_usd: "100"
+  price_buffer_bps: 50
+  max_concurrent_positions: 10
+
+market_filter:
+  categories: []
+
+max_concurrent_positions: 10
+max_exposure_per_market_usd: 500
+loss_management: none
