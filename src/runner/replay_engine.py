@@ -100,7 +100,16 @@ class ReplayEngine:
     ) -> ReplayResult:
         if strategy_name not in self._strategies:
             raise ValueError(f"unknown strategy: {strategy_name}")
-        strategy = self._strategies[strategy_name]
+        # Build a FRESH strategy per replay so configs aren't shared between
+        # replay jobs (and so per-config params from a sleeve YAML can be
+        # passed in via overrides if the API surfaces it later). Today this
+        # rebuilds with defaults; the hook is in place for sleeve-specific
+        # replays once Strategy Lab passes a sleeve_id.
+        template = self._strategies[strategy_name]
+        try:
+            strategy = type(template)()
+        except TypeError:
+            strategy = template  # fallback for non-default-constructible plugins
         overrides = overrides or ReplayOverrides()
 
         if range_end is None:
@@ -173,6 +182,17 @@ class ReplayEngine:
         trades_count = 0
         trade_rows: list[tuple[Any, ...]] = []
 
+        # PERSISTENT per-strategy state across the entire replay. Strategies
+        # rely on this dict for in-strategy book reconstruction (book_state),
+        # market-meta cache, cooldowns, active position sets, etc. Resetting
+        # state every event (the previous bug) made every strategy effectively
+        # stateless and never able to detect multi-event patterns.
+        strategy_state: dict[str, Any] = {
+            "sleeve_id": sleeve_id,
+            "config_id": config_id,
+            "config_hash": config_hash,
+        }
+
         async for event in self._stream_events(range_start, range_end, overrides.market_filter):
             # Maintain book state
             self._apply_event_to_book(event, books)
@@ -188,9 +208,9 @@ class ReplayEngine:
                         if trade is not None:
                             trades_count += 1
 
-            # Dispatch event to strategy
+            # Dispatch event to strategy with PERSISTENT state
             try:
-                signals: list[Signal] = await strategy.on_event(event, state={})
+                signals: list[Signal] = await strategy.on_event(event, strategy_state)
             except Exception:  # noqa: BLE001
                 logger.exception("strategy %s raised during replay event %s",
                                  strategy_name, event.event_id)
