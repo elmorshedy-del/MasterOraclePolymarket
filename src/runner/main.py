@@ -19,6 +19,7 @@ from src.analytics.tag_service import TagService
 from src.core import config as cfg
 from src.core import plugin_loader
 from src.core.events import (
+    EventType,
     MarketEvent,
     Order,
     RuntimeMode,
@@ -292,6 +293,14 @@ class Runner:
     async def _on_event(self, event: MarketEvent) -> None:
         self.events_seen += 1
         self.event_writer.submit(event)
+
+        # Settlement event takes precedence over tick / strategy dispatch:
+        # close all open positions on this market, clear strategy active
+        # state so the strategy can re-fire on subsequent markets.
+        if event.event_type == EventType.MARKET_RESOLVED and event.market_id:
+            await self._handle_resolution(event)
+            return
+
         await self._tick_fill_simulator(event)
 
         for runner in self.strategy_runners:
@@ -299,6 +308,48 @@ class Runner:
             for sig in signals:
                 self.signals_emitted += 1
                 await self._handle_signal(sig, runner)
+
+    async def _handle_resolution(self, event: MarketEvent) -> None:
+        if self.position_tracker is None:
+            return
+        market_id = event.market_id
+        winner = event.payload.get("winning_asset_id")
+        if not isinstance(winner, str):
+            # Older payload shape: resolution dict, or just a sentinel
+            res = event.payload.get("resolution")
+            if isinstance(res, dict):
+                winner = res.get("winning_asset_id") or res.get("asset_id")
+            elif isinstance(res, str):
+                winner = res
+            else:
+                winner = None
+
+        # Close every open position on the market via the tracker
+        trades = self.position_tracker.redeem_market(
+            market_id=market_id,
+            winning_asset_id=winner,
+            ts=event.ts,
+            strategy_name="resolution",
+            config_id="resolution",
+            config_hash="resolution",
+        )
+        for trade in trades:
+            self.trades_emitted += 1
+            if self._db_available:
+                try:
+                    await db_writers.insert_trade(trade, "resolution", source="resolution")
+                except Exception:  # noqa: BLE001
+                    logger.exception("failed to persist resolution trade %s", trade.trade_id)
+
+        # Clear strategy active sets so future markets can be traded
+        from src.strategies._lib.active_state import clear_for_market
+        for runner in self.strategy_runners:
+            removed = clear_for_market(runner.state, market_id)
+            if removed:
+                logger.info(
+                    "[resolution] cleared %d active entries for sleeve=%s market=%s",
+                    removed, runner.sleeve.sleeve.sleeve_id, market_id,
+                )
 
     async def _tick_fill_simulator(self, event: MarketEvent) -> None:
         if self.fill_simulator is None or self.position_tracker is None:

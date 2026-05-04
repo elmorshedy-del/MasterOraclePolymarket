@@ -155,6 +155,86 @@ class PositionTracker:
 
         return None
 
+    # -----------------------------------------------------------------------
+    # Resolution / redemption
+    # -----------------------------------------------------------------------
+
+    def redeem_market(
+        self,
+        market_id: str,
+        winning_asset_id: str | None,
+        ts,
+        strategy_name: str = "",
+        config_id: str = "default",
+        config_hash: str = "resolution",
+    ) -> list[Trade]:
+        """Settle every open position on ``market_id`` at resolution prices.
+
+        Polymarket resolution semantics:
+          - Winning asset's tokens redeem to $1.00
+          - Every other asset's tokens redeem to $0.00
+
+        Emits a Trade per closed position tagged with the resolution price as
+        exit_price. Removes positions from the in-memory tracker.
+
+        If ``winning_asset_id`` is None we know the market resolved but not
+        which side won — close at avg_entry (no PnL impact) so the platform
+        is consistent and the strategy can re-fire on subsequent markets.
+        """
+        affected = [
+            (key, pos) for (key, pos) in list(self._positions.items())
+            if pos.market_id == market_id
+        ]
+        trades: list[Trade] = []
+        for key, pos in affected:
+            if winning_asset_id is None:
+                exit_price = pos.avg_entry
+            elif pos.asset_id == winning_asset_id:
+                exit_price = Decimal("1") if pos.side == Side.BUY else Decimal("0")
+            else:
+                exit_price = Decimal("0") if pos.side == Side.BUY else Decimal("1")
+
+            if pos.side == Side.BUY:
+                raw = (exit_price - pos.avg_entry) * pos.size
+            else:
+                raw = (pos.avg_entry - exit_price) * pos.size
+            raw -= pos.total_gas_paid
+
+            edge_class = self._edge_class_by_sleeve.get(pos.sleeve_id)
+            haircut = (
+                self._haircut.overrides_by_edge_class.get(edge_class, self._haircut.default)
+                if edge_class is not None else self._haircut.default
+            )
+            pnl_after = raw * (Decimal(1) - haircut)
+
+            self._realized[pos.sleeve_id] = (
+                self._realized.get(pos.sleeve_id, Decimal(0)) + raw
+            )
+
+            trades.append(Trade(
+                trade_id=uuid4(),
+                sleeve_id=pos.sleeve_id,
+                strategy_name=strategy_name,
+                config_id=config_id,
+                market_id=pos.market_id,
+                asset_id=pos.asset_id,
+                side=pos.side,
+                entry_price=pos.avg_entry,
+                entry_size=pos.size,
+                entry_ts=pos.opened_at,
+                exit_price=exit_price,
+                exit_size=pos.size,
+                exit_ts=ts,
+                pnl=raw,
+                pnl_after_haircut=pnl_after,
+                realism_flag=RealismFlag.CLEAN,
+                fill_type=FillType.TAKER,   # resolution settlement; no maker queue involvement
+                tags={"config_hash": config_hash, "edge_class": edge_class, "settlement": True},
+            ))
+            del self._positions[key]
+            self.trades_emitted += 1
+        return trades
+
     def _close_against(
         self,
         fill: Fill,
