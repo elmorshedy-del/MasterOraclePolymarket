@@ -182,16 +182,23 @@ class Runner:
             if not loaded_sleeve.sleeve.enabled:
                 continue
             strategy_name = loaded_sleeve.sleeve.strategy
-            strategy = self._strategy_plugins.get(strategy_name)
-            if strategy is None:
+            template = self._strategy_plugins.get(strategy_name)
+            if template is None:
                 logger.warning(
                     "sleeve %s references unknown strategy %s — skipping",
                     loaded_sleeve.sleeve.sleeve_id,
                     strategy_name,
                 )
                 continue
+
+            # Instantiate a FRESH strategy per sleeve, applying the sleeve YAML
+            # 'params' so aggressive/conservative/etc. configs actually differ.
+            # Sharing the plugin-loader instance across sleeves was a bug:
+            # config variants would silently use defaults from plugin().
+            sleeve_strategy = _instantiate_with_params(template, loaded_sleeve.sleeve.params)
+
             self.strategy_runners.append(
-                StrategyRunner(sleeve=loaded_sleeve, strategy=strategy)
+                StrategyRunner(sleeve=loaded_sleeve, strategy=sleeve_strategy)
             )
 
             if self._db_available:
@@ -417,6 +424,31 @@ class Runner:
             if r.sleeve.sleeve.sleeve_id == sleeve_id:
                 return r
         return None
+
+
+# ---------------------------------------------------------------------------
+# Per-sleeve strategy instantiation
+# ---------------------------------------------------------------------------
+
+
+def _instantiate_with_params(template, params: dict[str, Any]):
+    """Build a fresh strategy instance for one sleeve, threading YAML params in.
+
+    Strategy classes accept their tunables as keyword arguments to ``__init__``
+    (cross_outcome_arb, basket_arb, etc. all use this pattern). If a strategy
+    rejects unknown kwargs we fall back to the no-arg constructor and log;
+    that preserves boot rather than crashing.
+    """
+    cls = type(template)
+    try:
+        return cls(**(params or {}))
+    except TypeError as exc:
+        logger.warning(
+            "strategy %s does not accept sleeve params (%s) — falling back to defaults",
+            getattr(template, "name", cls.__name__),
+            exc,
+        )
+        return cls()
 
 
 # ---------------------------------------------------------------------------

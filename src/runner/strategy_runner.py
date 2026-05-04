@@ -32,6 +32,14 @@ class StrategyRunner:
     signals_emitted: int = 0
     last_event_ts: Any = None
 
+    def __post_init__(self) -> None:
+        # Pre-populate sleeve identity so strategies that read state["sleeve_id"]
+        # / state["config_id"] (i.e. all of them, when constructing Signals)
+        # produce correctly-attributed Signals from their first event.
+        self.state.setdefault("sleeve_id", self.sleeve.sleeve.sleeve_id)
+        self.state.setdefault("config_id", self.sleeve.sleeve.config_id)
+        self.state.setdefault("config_hash", self.sleeve.config_hash)
+
     @property
     def mode(self) -> RuntimeMode:
         return self.sleeve.sleeve.mode
