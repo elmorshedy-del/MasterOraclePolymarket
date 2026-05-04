@@ -380,6 +380,14 @@ class Runner:
         if self.fill_simulator is None or self.position_tracker is None:
             return
 
+        # Central risk-cap enforcement (audit P0-6). Sleeve YAMLs declare:
+        #   max_concurrent_positions   — refused if open_positions >= cap
+        #   max_exposure_per_market_usd — refused if existing + this signal exceeds
+        # These are enforced HERE (post-strategy, pre-execution) so a buggy or
+        # over-eager strategy can't blow the sleeve's risk envelope.
+        if not self._signal_within_risk_caps(signal, runner):
+            return
+
         book = STORE.get(signal.market_id, signal.asset_id)
         if book is None:
             return
@@ -482,6 +490,53 @@ class Runner:
             if r.sleeve.sleeve.sleeve_id == sleeve_id:
                 return r
         return None
+
+    def _signal_within_risk_caps(self, signal, runner: StrategyRunner) -> bool:
+        """Check sleeve-level caps from the YAML before forwarding to fills.
+
+        Returns False (and logs at info) when a signal would breach a cap;
+        returns True otherwise. The check is conservative — when in doubt
+        (no tracker, missing field, etc.) we admit the signal so we don't
+        silently choke a working strategy.
+        """
+        from decimal import Decimal as _D
+        sleeve = runner.sleeve.sleeve
+        if self.position_tracker is None:
+            return True
+
+        # Concurrent-position cap
+        open_positions = self.position_tracker.positions(sleeve.sleeve_id)
+        if len(open_positions) >= int(sleeve.max_concurrent_positions or 999_999):
+            logger.info(
+                "[risk] reject signal %s: sleeve %s at concurrent-position cap (%d)",
+                signal.signal_id, sleeve.sleeve_id, sleeve.max_concurrent_positions,
+            )
+            return False
+
+        # Per-market exposure cap (USD)
+        try:
+            cap = _D(str(sleeve.max_exposure_per_market_usd or 0))
+        except Exception:  # noqa: BLE001
+            cap = _D(0)
+        if cap > 0:
+            existing_exposure = sum(
+                (p.avg_entry * p.size for p in open_positions
+                 if p.market_id == signal.market_id),
+                start=_D(0),
+            )
+            signal_notional = (
+                (signal.price or _D(0)) * signal.size if signal.price is not None
+                else _D(0)
+            )
+            if existing_exposure + signal_notional > cap:
+                logger.info(
+                    "[risk] reject signal %s: sleeve %s market %s would exceed exposure cap (%.2f + %.2f > %.2f)",
+                    signal.signal_id, sleeve.sleeve_id, signal.market_id,
+                    float(existing_exposure), float(signal_notional), float(cap),
+                )
+                return False
+
+        return True
 
     async def _persist_positions_for(self, fill) -> None:
         """Sync paper_positions with the in-memory tracker for a (sleeve, market,
