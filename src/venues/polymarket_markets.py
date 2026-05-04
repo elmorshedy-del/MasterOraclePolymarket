@@ -79,6 +79,26 @@ class PolymarketMarkets:
                     is_new = meta.market_id not in self._known_meta
                     self._known_meta[meta.market_id] = meta
 
+                    # Persist into markets table so the TagService can join on
+                    # market_id for category / volume / end_time enrichment
+                    # (audit Med-7). Non-fatal — keep ingestion alive on errors.
+                    try:
+                        from src.db import writers as db_writers
+                        await db_writers.upsert_market_meta(
+                            market_id=meta.market_id,
+                            venue=meta.venue,
+                            venue_market_id=meta.venue_market_id,
+                            title=meta.title,
+                            category=meta.category,
+                            subcategory=meta.subcategory,
+                            end_time=meta.end_time,
+                            tick_size=float(meta.tick_size),
+                            asset_ids=list(meta.asset_ids),
+                            tags_extra=dict(meta.tags_extra),
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("[polymarket_markets] markets-table upsert skipped: %s", exc)
+
                     # Emit MARKET_META on first observation so strategies can
                     # cache category / end_time / volume_24h / asset_ids.
                     if is_new:

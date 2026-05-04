@@ -401,6 +401,13 @@ class Runner:
             config_id=runner.sleeve.sleeve.config_id,
             config_hash=runner.sleeve.config_hash,
         )
+
+        # Mirror the in-memory PositionTracker state into paper_positions so
+        # the API endpoint and dashboard accurately reflect open positions
+        # rather than rendering an empty table forever (audit P0-8).
+        if self._db_available:
+            await self._persist_positions_for(fill)
+
         if trade is None:
             return
 
@@ -424,6 +431,42 @@ class Runner:
             if r.sleeve.sleeve.sleeve_id == sleeve_id:
                 return r
         return None
+
+    async def _persist_positions_for(self, fill) -> None:
+        """Sync paper_positions with the in-memory tracker for a (sleeve, market,
+        asset) tuple. Open positions are upserted; closed sides are deleted."""
+        if self.position_tracker is None:
+            return
+        live_positions = {
+            (p.market_id, p.asset_id, p.side.value): p
+            for p in self.position_tracker.positions(fill.sleeve_id)
+            if p.market_id == fill.market_id and p.asset_id == fill.asset_id
+        }
+        for side in ("buy", "sell"):
+            pos = live_positions.get((fill.market_id, fill.asset_id, side))
+            try:
+                if pos is not None:
+                    await db_writers.upsert_position(
+                        sleeve_id=pos.sleeve_id,
+                        market_id=pos.market_id,
+                        asset_id=pos.asset_id,
+                        side=pos.side.value,
+                        size=float(pos.size),
+                        avg_entry=float(pos.avg_entry),
+                        opened_at=pos.opened_at,
+                    )
+                else:
+                    await db_writers.upsert_position(
+                        sleeve_id=fill.sleeve_id,
+                        market_id=fill.market_id,
+                        asset_id=fill.asset_id,
+                        side=side,
+                        size=0,
+                        avg_entry=0,
+                        opened_at=fill.ts_filled,
+                    )
+            except Exception:  # noqa: BLE001
+                logger.exception("paper_positions sync failed for %s", fill.sleeve_id)
 
 
 # ---------------------------------------------------------------------------

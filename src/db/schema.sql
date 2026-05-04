@@ -37,20 +37,23 @@ CREATE INDEX IF NOT EXISTS idx_markets_end_time ON markets (end_time) WHERE end_
 -- ---------------------------------------------------------------------------
 -- Event log — the foundation for replay (Tier 2 fidelity)
 -- ---------------------------------------------------------------------------
--- Partitioned by day for storage retention; the runner attaches a partition
--- nightly via `db/migrations/partition_events.sql`.
+-- V1 ships UNPARTITIONED — the retention sweeper handles cleanup via DELETE,
+-- which is sufficient at the $50/mo Railway scale we target. The previous
+-- ``PARTITION BY RANGE (ts)`` declaration referenced a partition manager
+-- that was never written; with no child partition every INSERT failed,
+-- which broke ingestion entirely. If the table grows past ~5 GB we revisit
+-- partitioning with a working bucket-creation job.
 
 CREATE TABLE IF NOT EXISTS market_events (
-    id              BIGSERIAL,
+    id              BIGSERIAL PRIMARY KEY,
     event_id        UUID NOT NULL,
     event_type      TEXT NOT NULL,
     market_id       TEXT,
     asset_id        TEXT,
     venue           TEXT NOT NULL,
     ts              TIMESTAMPTZ NOT NULL,
-    payload         JSONB NOT NULL,
-    PRIMARY KEY (id, ts)
-) PARTITION BY RANGE (ts);
+    payload         JSONB NOT NULL
+);
 
 CREATE INDEX IF NOT EXISTS idx_events_market_ts ON market_events (market_id, ts);
 CREATE INDEX IF NOT EXISTS idx_events_type_ts   ON market_events (event_type, ts);

@@ -189,6 +189,78 @@ async def insert_fill(fill: Fill) -> None:
         )
 
 
+async def upsert_position(
+    sleeve_id: str,
+    market_id: str,
+    asset_id: str,
+    side: str,
+    size: float,
+    avg_entry: float,
+    opened_at,
+) -> None:
+    """Upsert an open paper_positions row. ``size <= 0`` deletes the row."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if size > 0:
+            await conn.execute(
+                """
+                INSERT INTO paper_positions
+                  (sleeve_id, market_id, asset_id, side, size, avg_entry, opened_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (sleeve_id, market_id, asset_id, side) DO UPDATE SET
+                  size = EXCLUDED.size,
+                  avg_entry = EXCLUDED.avg_entry,
+                  last_updated = now()
+                """,
+                sleeve_id, market_id, asset_id, side, size, avg_entry, opened_at,
+            )
+        else:
+            await conn.execute(
+                """
+                DELETE FROM paper_positions
+                WHERE sleeve_id = $1 AND market_id = $2 AND asset_id = $3 AND side = $4
+                """,
+                sleeve_id, market_id, asset_id, side,
+            )
+
+
+async def upsert_market_meta(
+    market_id: str,
+    venue: str,
+    venue_market_id: str,
+    title: str,
+    category: str,
+    subcategory: str | None,
+    end_time,
+    tick_size: float,
+    asset_ids: list[str],
+    tags_extra: dict[str, Any],
+) -> None:
+    """Persist a market into the markets table for tag enrichment."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO markets
+              (market_id, venue, venue_market_id, title, category, subcategory,
+               end_time, tick_size, asset_ids, tags_extra)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+            ON CONFLICT (venue, venue_market_id) DO UPDATE SET
+              title = EXCLUDED.title,
+              category = EXCLUDED.category,
+              subcategory = EXCLUDED.subcategory,
+              end_time = EXCLUDED.end_time,
+              tick_size = EXCLUDED.tick_size,
+              asset_ids = EXCLUDED.asset_ids,
+              tags_extra = EXCLUDED.tags_extra,
+              last_seen_at = now()
+            """,
+            market_id, venue, venue_market_id, title, category, subcategory,
+            end_time, tick_size, asset_ids,
+            orjson.dumps(_jsonable(tags_extra)).decode(),
+        )
+
+
 async def insert_trade(trade: Trade, config_hash: str, source: str = "live") -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
