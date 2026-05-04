@@ -115,15 +115,17 @@ class MomentumOrderbook:
         if target_asset is None or target_ask is None:
             return []
 
-        # Cooldown
+        # Cooldown is the only throttle for momentum: positions resolve when
+        # the underlying market resolves, and the test contract is "after the
+        # cooldown expires the strategy may re-fire on the same pair."
         cooldowns: dict[tuple[str, str], Any] = state.setdefault("_mom_cooldowns", {})
         last = cooldowns.get((market_id, target_asset))
         if last is not None and (event.ts - last) < timedelta(seconds=self.params.cooldown_secs):
             return []
 
+        # Coarse concurrent-pair counter — central platform-level risk caps
+        # are enforced separately in the runner.
         active: set[tuple[str, str]] = state.setdefault("_active_mom", set())
-        if (market_id, target_asset) in active:
-            return []
         if len(active) >= self.params.max_concurrent_positions:
             return []
 

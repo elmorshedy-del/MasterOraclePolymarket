@@ -89,12 +89,15 @@ class MeanRevertPostSpike:
         if oldest_price <= 0:
             return []
         pct_change = (mid - oldest_price) / oldest_price
-        if abs(pct_change) < self.params.spike_threshold_pct:
+        # Only fade UP-spikes on the trigger asset. A DOWN-spike means the
+        # paired asset moved UP — buying that expensive pair is the OPPOSITE
+        # of mean reversion. The pair-side will see its own UP-spike on its
+        # own event tick and fire correctly there.
+        if pct_change < self.params.spike_threshold_pct:
             return []
 
-        # Direction: spike up on this asset → fade by buying a paired asset
-        # whose price should have dropped. Find any other asset_id in same
-        # market with price in tradeable band.
+        # Spike up on this asset → fade by buying the paired asset (which has
+        # dropped correspondingly in a binary market).
         legs = market_assets.get(market_id, set()) - {asset_id}
         if not legs:
             return []

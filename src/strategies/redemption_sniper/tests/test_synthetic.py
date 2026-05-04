@@ -66,7 +66,8 @@ async def test_fires_inside_window_and_price_band():
     sigs = await strat.on_event(_snap("m1", "yes", "0.98", ts=now), state)
     assert len(sigs) == 1
     assert sigs[0].asset_id == "yes"
-    assert sigs[0].price == Decimal("0.9802")  # 0.98 + 25bps
+    # 25 bps = 0.0025 → 0.98 + 0.0025 = 0.9825
+    assert sigs[0].price == Decimal("0.9825")
 
 
 @pytest.mark.asyncio
