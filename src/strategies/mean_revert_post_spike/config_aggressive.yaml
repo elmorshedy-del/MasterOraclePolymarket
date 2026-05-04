@@ -1,0 +1,13 @@
+name: aggressive
+description: |
+  Looser spike threshold (5%), bigger size, shorter cooldown.
+
+params:
+  window_secs: 120
+  spike_threshold_pct: "0.05"
+  min_tradeable_price: "0.05"
+  max_tradeable_price: "0.90"
+  target_notional_usd: "150"
+  price_buffer_bps: 100
+  fade_cooldown_secs: 300
+  max_concurrent_positions: 50

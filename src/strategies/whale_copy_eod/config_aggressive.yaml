@@ -1,0 +1,11 @@
+name: aggressive
+description: |
+  Bigger copy ratio, larger per-trade cap, shorter cooldown.
+
+params:
+  min_copy_usd: "50"
+  copy_ratio: "0.10"
+  max_size_per_trade_usd: "500"
+  price_buffer_bps: 100
+  wallet_market_cooldown_secs: 300
+  max_concurrent_positions: 60

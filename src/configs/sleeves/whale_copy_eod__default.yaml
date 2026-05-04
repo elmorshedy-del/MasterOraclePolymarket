@@ -1,0 +1,22 @@
+sleeve_id: whale_copy_eod__default
+strategy: whale_copy_eod
+config_id: default
+edge_class: copy
+enabled: true
+mode: replay_only
+starting_capital_usd: 5000
+
+params:
+  min_copy_usd: "100"
+  copy_ratio: "0.05"
+  max_size_per_trade_usd: "200"
+  price_buffer_bps: 50
+  wallet_market_cooldown_secs: 600
+  max_concurrent_positions: 30
+
+market_filter:
+  categories: []
+
+max_concurrent_positions: 30
+max_exposure_per_market_usd: 200
+loss_management: none

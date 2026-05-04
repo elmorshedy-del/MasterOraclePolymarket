@@ -1,0 +1,24 @@
+sleeve_id: mean_revert_post_spike__default
+strategy: mean_revert_post_spike
+config_id: default
+edge_class: directional
+enabled: true
+mode: replay_only
+starting_capital_usd: 5000
+
+params:
+  window_secs: 120
+  spike_threshold_pct: "0.10"
+  min_tradeable_price: "0.10"
+  max_tradeable_price: "0.80"
+  target_notional_usd: "50"
+  price_buffer_bps: 100
+  fade_cooldown_secs: 600
+  max_concurrent_positions: 30
+
+market_filter:
+  categories: []
+
+max_concurrent_positions: 30
+max_exposure_per_market_usd: 50
+loss_management: none

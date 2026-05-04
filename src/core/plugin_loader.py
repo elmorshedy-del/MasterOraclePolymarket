@@ -127,9 +127,27 @@ def _is_template_or_private(path: Path) -> bool:
 
 
 def _load_module_plugin(module_path: Path) -> Any | None:
-    """Import the module and pull out its ``plugin()`` factory or ``Plugin`` class."""
+    """Import the module and pull out its ``plugin()`` factory or ``Plugin`` class.
+
+    Uses a unique module name per file path so multiple plugin files can share a
+    stem (e.g. every strategy folder has ``strategy.py``) without colliding in
+    Python's import cache. Registers the module in ``sys.modules`` BEFORE
+    executing it so that:
+      - dataclass + pydantic forward-ref resolution works
+      - intra-module imports (e.g. ``from src.strategies._lib import ...``) see
+        a stable module identity
+      - ``inspect.getmodule`` and qualified-class lookups resolve correctly
+    """
+    import sys
+
+    # Build a stable, collision-free module name from the file path.
+    # Example: src/strategies/cross_outcome_arb/strategy.py
+    #       -> _plugin.src.strategies.cross_outcome_arb.strategy
+    rel_parts = list(module_path.with_suffix("").parts)
+    mod_name = "_plugin." + ".".join(rel_parts)
+
     spec = importlib.util.spec_from_file_location(
-        f"_plugin_{module_path.stem}",
+        mod_name,
         module_path,
     )
     if spec is None or spec.loader is None:
@@ -137,7 +155,13 @@ def _load_module_plugin(module_path: Path) -> Any | None:
         return None
 
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.modules[mod_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        # Roll back on failure so a partially-loaded module isn't visible.
+        sys.modules.pop(mod_name, None)
+        raise
 
     if hasattr(module, "plugin") and callable(module.plugin):
         return module.plugin()

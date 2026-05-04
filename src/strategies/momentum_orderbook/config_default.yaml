@@ -1,0 +1,14 @@
+name: default
+description: |
+  Trade direction of TOB depth imbalance. 75/25 thresholds, $40/trade.
+
+params:
+  bullish_threshold: "0.75"
+  bearish_threshold: "0.25"
+  min_price: "0.20"
+  max_price: "0.80"
+  min_tob_depth_usd: "200"
+  target_notional_usd: "40"
+  price_buffer_bps: 100
+  cooldown_secs: 120
+  max_concurrent_positions: 60

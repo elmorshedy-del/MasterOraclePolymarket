@@ -1,0 +1,14 @@
+name: aggressive
+description: |
+  Looser thresholds (70/30), bigger size, shorter cooldown, lower depth bar.
+
+params:
+  bullish_threshold: "0.70"
+  bearish_threshold: "0.30"
+  min_price: "0.15"
+  max_price: "0.85"
+  min_tob_depth_usd: "100"
+  target_notional_usd: "100"
+  price_buffer_bps: 100
+  cooldown_secs: 60
+  max_concurrent_positions: 100

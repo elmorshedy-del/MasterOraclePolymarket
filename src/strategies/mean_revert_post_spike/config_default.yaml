@@ -1,0 +1,13 @@
+name: default
+description: |
+  Fade ≥10% moves over 2-minute window. Trade the paired side at $0.10-0.80.
+
+params:
+  window_secs: 120
+  spike_threshold_pct: "0.10"
+  min_tradeable_price: "0.10"
+  max_tradeable_price: "0.80"
+  target_notional_usd: "50"
+  price_buffer_bps: 100
+  fade_cooldown_secs: 600
+  max_concurrent_positions: 30
