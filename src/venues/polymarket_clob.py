@@ -75,8 +75,21 @@ class PolymarketCLOB:
     # -----------------------------------------------------------------------
 
     def set_asset_ids(self, asset_ids: Iterable[str]) -> None:
-        """Replace the subscription set. Reconnect to apply."""
+        """Replace the subscription set in place. Call ``resubscribe()`` to
+        push the new list to Polymarket (drops + re-establishes the WS so
+        the setup hook re-runs with the new list)."""
         self._asset_ids = list(asset_ids)
+
+    async def resubscribe(self) -> None:
+        """Force a reconnect so the new asset_ids list is applied.
+
+        Polymarket's CLOB WS does not document a reliable in-band unsubscribe
+        path; reconnecting is the cleanest way to mutate the subscription
+        set. Cheap (sub-second on a working link) and safe — the in-memory
+        order book repopulates from the post-reconnect BOOK snapshots.
+        """
+        if self._ws is not None:
+            await self._ws.cycle()
 
     # -----------------------------------------------------------------------
     # MarketDataSource interface

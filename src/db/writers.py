@@ -155,6 +155,17 @@ async def insert_order(order: Order) -> None:
 
 
 async def insert_fill(fill: Fill) -> None:
+    """Insert a fill row and reconcile the parent order's status.
+
+    Audit Med-6: previously every fill set the order to 'filled' regardless
+    of whether the cumulative filled size matched the order size. Partial
+    fills (size < order.size) were misreported as fully filled. Now we
+    aggregate fills against paper_orders.size and pick:
+
+      missed       → cancelled
+      Σ size >= order.size → filled
+      0 < Σ size < order.size → partially_filled
+    """
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
@@ -181,18 +192,31 @@ async def insert_fill(fill: Fill) -> None:
             orjson.dumps(_jsonable(fill.metadata)).decode(),
         )
 
-        # Update order status if fully filled
+        if fill.fill_type.value == "missed":
+            new_status = "cancelled"
+            await conn.execute(
+                "UPDATE paper_orders SET status = $1 WHERE order_id = $2 AND status = 'open'",
+                new_status, fill.order_id,
+            )
+            return
+
+        # Reconcile against the order's cumulative filled size
         await conn.execute(
             """
-            UPDATE paper_orders
+            UPDATE paper_orders po
             SET status = CASE
-              WHEN $1 = 'missed' THEN 'cancelled'
-              ELSE 'filled'
+              WHEN agg.filled_size >= po.size THEN 'filled'
+              WHEN agg.filled_size > 0 THEN 'partially_filled'
+              ELSE 'open'
             END
-            WHERE order_id = $2
-              AND status = 'open'
+            FROM (
+                SELECT order_id, COALESCE(SUM(size), 0) AS filled_size
+                FROM paper_fills
+                WHERE order_id = $1 AND fill_type IN ('taker', 'maker_fast', 'maker_slow')
+                GROUP BY order_id
+            ) agg
+            WHERE po.order_id = $1 AND agg.order_id = po.order_id
             """,
-            fill.fill_type.value,
             fill.order_id,
         )
 

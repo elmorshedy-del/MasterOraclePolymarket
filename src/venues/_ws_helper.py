@@ -46,6 +46,8 @@ class ReconnectingWS:
         self.backoff_max = backoff_max
 
         self._stop = asyncio.Event()
+        self._cycle = asyncio.Event()        # signal: drop the current socket
+        self._current_ws = None
 
         # Telemetry
         self.connections_attempted: int = 0
@@ -55,6 +57,22 @@ class ReconnectingWS:
 
     def stop(self) -> None:
         self._stop.set()
+        self._cycle.set()  # unblock anyone waiting on a cycle
+
+    async def cycle(self) -> None:
+        """Force a reconnect (drops current socket so setup() runs again).
+
+        Used by venue adapters when their subscription set changes — e.g.
+        polymarket_clob picking up a new asset_ids list from a hot-reloaded
+        markets config.
+        """
+        self._cycle.set()
+        ws = self._current_ws
+        if ws is not None:
+            try:
+                await ws.close(code=1000, reason="resubscribe")
+            except Exception:  # noqa: BLE001
+                pass
 
     async def stream(self) -> AsyncIterator[str]:
         backoff = self.backoff_initial
@@ -62,6 +80,7 @@ class ReconnectingWS:
 
         while not self._stop.is_set():
             self.connections_attempted += 1
+            self._cycle.clear()
             try:
                 async with websockets.connect(
                     self.url,
@@ -69,6 +88,7 @@ class ReconnectingWS:
                     ping_timeout=self.ping_timeout,
                     max_size=2**22,  # 4 MiB — orderbook snapshots can be big
                 ) as ws:
+                    self._current_ws = ws
                     self.connections_successful += 1
                     backoff = self.backoff_initial
                     logger.info("[%s] ws connected", self.name)
@@ -81,7 +101,7 @@ class ReconnectingWS:
                         if isinstance(raw, bytes):
                             raw = raw.decode("utf-8", errors="replace")
                         yield raw
-                        if self._stop.is_set():
+                        if self._stop.is_set() or self._cycle.is_set():
                             break
             except asyncio.CancelledError:
                 raise
