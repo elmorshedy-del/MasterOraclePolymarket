@@ -46,6 +46,24 @@ async def get_pool() -> asyncpg.Pool:
     min_size = int(os.environ.get("DB_POOL_MIN", "2"))
     max_size = int(os.environ.get("DB_POOL_MAX", "10"))
 
+    async def _on_connect(conn: asyncpg.Connection) -> None:
+        """Register Decimal codec for Postgres NUMERIC.
+
+        Audit Low-4: writers were going Decimal → str(float()) → DB and back.
+        Float intermediation introduces silent precision loss on prices like
+        '0.4895' → 0.4894999... With this codec, asyncpg accepts Decimal
+        directly and round-trips it as Decimal. Money columns stay precise
+        end-to-end.
+        """
+        from decimal import Decimal as _D
+        await conn.set_type_codec(
+            "numeric",
+            encoder=lambda v: str(v) if isinstance(v, _D) else str(_D(str(v))),
+            decoder=lambda s: _D(s),
+            schema="pg_catalog",
+            format="text",
+        )
+
     async for attempt in AsyncRetrying(
         retry=retry_if_exception_type((OSError, asyncpg.PostgresConnectionError)),
         wait=wait_exponential(multiplier=0.5, max=10),
@@ -59,8 +77,9 @@ async def get_pool() -> asyncpg.Pool:
                 max_size=max_size,
                 command_timeout=30,
                 statement_cache_size=0,  # safer when schema migrates under us
+                init=_on_connect,
             )
-            logger.info("db pool ready (min=%d max=%d)", min_size, max_size)
+            logger.info("db pool ready (min=%d max=%d) with Decimal codec", min_size, max_size)
 
     assert _pool is not None
     return _pool
