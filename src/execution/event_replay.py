@@ -145,9 +145,20 @@ class EventReplayFillSimulator:
             self.thin_market_flags += 1
             flag = RealismFlag.THIN_MARKET
 
-        # Size-vs-depth check
+        # Size-vs-depth check.
+        # Audit P1-1: previously used depth_at_or_better (maker-perspective on
+        # the SAME side as the order) which under-flagged would-move-market on
+        # taker fills. The right metric is the OPPOSING-side liquidity that
+        # this order would actually consume.
         if order.price is not None:
-            depth = book.depth_at_or_better(order.side, order.price)
+            depth = book.taker_consumable_depth(order.side, order.price)
+            if depth > 0 and order.size > depth * WOULD_MOVE_MARKET_PCT:
+                self.would_have_moved_market += 1
+                flag = RealismFlag.WOULD_HAVE_MOVED_MARKET
+        else:
+            # MARKET order: use the entire visible opposite side at any price.
+            opposite_levels = book.asks if order.side == Side.BUY else book.bids
+            depth = sum((lvl.size for lvl in opposite_levels), start=Decimal(0))
             if depth > 0 and order.size > depth * WOULD_MOVE_MARKET_PCT:
                 self.would_have_moved_market += 1
                 flag = RealismFlag.WOULD_HAVE_MOVED_MARKET

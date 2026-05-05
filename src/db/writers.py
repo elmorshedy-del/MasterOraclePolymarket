@@ -36,6 +36,11 @@ async def upsert_sleeve(
 ) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
+        # Audit Med-2: previously last_mode_change_at = now() on EVERY upsert,
+        # so each runner boot reset the gate's day-count to zero. Promotion
+        # gates (live_log → live_signal needs ≥14 days) became impossible to
+        # ever satisfy. Now that timestamp only advances when mode actually
+        # changes; otherwise we keep the existing value.
         await conn.execute(
             """
             INSERT INTO sleeves
@@ -50,7 +55,10 @@ async def upsert_sleeve(
                 mode          = EXCLUDED.mode,
                 enabled       = EXCLUDED.enabled,
                 config_hash   = EXCLUDED.config_hash,
-                last_mode_change_at = now()
+                last_mode_change_at = CASE
+                    WHEN sleeves.mode IS DISTINCT FROM EXCLUDED.mode THEN now()
+                    ELSE sleeves.last_mode_change_at
+                END
             """,
             sleeve_id,
             strategy_name,

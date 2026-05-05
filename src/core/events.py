@@ -139,11 +139,38 @@ class OrderBook:
             return None
         return ask.price - bid.price
 
+    def taker_consumable_depth(self, side: Side, price: Decimal) -> Decimal:
+        """Total OPPOSING-side liquidity a taker order can consume up to ``price``.
+
+        For a BUY taker: sum asks with price <= our limit.
+        For a SELL taker: sum bids with price >= our limit.
+
+        This is the metric the realism preflight cares about ("would my order
+        eat 10% of available liquidity?"). Distinct from
+        ``depth_at_or_better`` which is the maker-perspective queue lookup.
+        """
+        total = Decimal(0)
+        if side == Side.BUY:
+            for level in self.asks:
+                if level.price <= price:
+                    total += level.size
+                else:
+                    break
+        else:
+            for level in self.bids:
+                if level.price >= price:
+                    total += level.size
+                else:
+                    break
+        return total
+
     def depth_at_or_better(self, side: Side, price: Decimal) -> Decimal:
-        """Total resting size at-or-better than a given price.
+        """Total resting size at-or-better than a given price (MAKER perspective).
 
         For a buy (we'd be a bid), better-than means strictly higher. For a
-        sell, better-than means strictly lower.
+        sell, better-than means strictly lower. Used by RestingMaker for
+        queue-position math; NOT for taker preflight (use
+        :meth:`taker_consumable_depth` for that).
         """
         total = Decimal(0)
         if side == Side.BUY:

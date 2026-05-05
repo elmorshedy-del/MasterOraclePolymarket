@@ -345,36 +345,46 @@ class ReplayEngine:
         except RuntimeError:
             return
 
-        # Stream in chunks to avoid loading 7 days of events at once
+        # Stream in chunks via keyset pagination on (ts, id). Audit P1-2:
+        # the previous version paginated by ``ts >= rows[-1].ts`` which
+        # re-fetched the last row of every page (and could loop forever when
+        # many events shared a timestamp). Tracking (ts, id) gives a strict
+        # > predicate that's exact even for ts collisions.
         page = 10_000
         offset_ts = start
+        offset_id: int = -1
         while True:
             async with pool.acquire() as conn:
                 if market_filter:
                     rows = await conn.fetch(
                         """
-                        SELECT event_id, event_type, market_id, asset_id, venue, ts, payload
+                        SELECT id, event_id, event_type, market_id, asset_id, venue, ts, payload
                         FROM market_events
-                        WHERE ts >= $1 AND ts < $2 AND market_id = ANY($3)
-                        ORDER BY ts ASC
-                        LIMIT $4
+                        WHERE ts < $2
+                          AND (ts > $1 OR (ts = $1 AND id > $4))
+                          AND market_id = ANY($3)
+                        ORDER BY ts ASC, id ASC
+                        LIMIT $5
                         """,
                         offset_ts,
                         end,
                         market_filter,
+                        offset_id,
                         page,
                     )
                 else:
                     rows = await conn.fetch(
                         """
-                        SELECT event_id, event_type, market_id, asset_id, venue, ts, payload
+                        SELECT id, event_id, event_type, market_id, asset_id, venue, ts, payload
                         FROM market_events
-                        WHERE ts >= $1 AND ts < $2
-                        ORDER BY ts ASC
-                        LIMIT $3
+                        WHERE ts < $2
+                          AND (ts > $1 OR (ts = $1 AND id > $3))
+                        ORDER BY ts ASC, id ASC
+                        LIMIT $4
                         """,
                         offset_ts,
                         end,
+                        offset_id,
                         page,
                     )
 
@@ -398,8 +408,8 @@ class ReplayEngine:
                     payload=payload or {},
                 )
 
-            # Advance offset to last seen ts + 1µs to avoid re-reading the same row
             offset_ts = rows[-1]["ts"]
+            offset_id = int(rows[-1]["id"])
             if len(rows) < page:
                 return
 
