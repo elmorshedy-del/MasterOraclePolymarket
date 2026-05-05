@@ -43,6 +43,15 @@ class BasketArb:
             self.params.max_sum_threshold = Decimal(str(self.params.max_sum_threshold))
         if not isinstance(self.params.max_size_per_leg_usd, Decimal):
             self.params.max_size_per_leg_usd = Decimal(str(self.params.max_size_per_leg_usd))
+        # Param sanity. min_legs < 2 makes no sense (one leg is not an arb);
+        # cross_outcome_arb is the dedicated 2-leg path so we floor at 2 here
+        # so a misconfigured sleeve YAML can't fire single-leg "arbs".
+        if self.params.min_legs < 2:
+            self.params.min_legs = 2
+        if self.params.max_size_per_leg_usd <= 0:
+            self.params.max_size_per_leg_usd = Decimal("100")
+        if self.params.max_sum_threshold <= 0 or self.params.max_sum_threshold > Decimal("1"):
+            self.params.max_sum_threshold = Decimal("0.98")
 
     def required_event_types(self) -> set[str]:
         return {

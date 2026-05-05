@@ -85,12 +85,10 @@ class WhaleCopyEod:
         if not wallet or wallet not in self.params.tracked_wallets:
             return []
 
+        from src.strategies._lib.parsing import safe_decimal
+
         # USD value filter
-        usd_raw = payload.get("usd_value")
-        try:
-            usd_value = Decimal(str(usd_raw)) if usd_raw is not None else None
-        except Exception:  # noqa: BLE001
-            usd_value = None
+        usd_value = safe_decimal(payload.get("usd_value"))
         if usd_value is None or usd_value < self.params.min_copy_usd:
             return []
 
@@ -101,11 +99,7 @@ class WhaleCopyEod:
         whale_side = Side.BUY if side_raw == "BUY" else Side.SELL
 
         # Whale's traded size (tokens)
-        size_raw = payload.get("size")
-        try:
-            whale_size = Decimal(str(size_raw)) if size_raw is not None else None
-        except Exception:  # noqa: BLE001
-            whale_size = None
+        whale_size = safe_decimal(payload.get("size"))
         if whale_size is None or whale_size <= 0:
             return []
 
@@ -122,11 +116,7 @@ class WhaleCopyEod:
 
         # Fair-price sizing — prefer current book, else fall back to whale's price
         ask = book_state.best_ask(state, asset_id)
-        whale_price_raw = payload.get("price")
-        try:
-            whale_price = Decimal(str(whale_price_raw)) if whale_price_raw is not None else None
-        except Exception:  # noqa: BLE001
-            whale_price = None
+        whale_price = safe_decimal(payload.get("price"))
 
         ref_price = ask or whale_price
         if ref_price is None or ref_price <= 0:

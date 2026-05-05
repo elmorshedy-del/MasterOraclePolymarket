@@ -67,10 +67,8 @@ class RedemptionSniper:
 
         # Track recent adverse prints
         if event.event_type == EventType.TRADE_PRINT and event.asset_id is not None:
-            try:
-                price = Decimal(str(event.payload.get("price")))
-            except (TypeError, ValueError):
-                price = None
+            from src.strategies._lib.parsing import safe_decimal
+            price = safe_decimal(event.payload.get("price"))
             if price is not None:
                 recent = state.setdefault("_recent_prints", {}).setdefault(event.asset_id, [])
                 recent.append((event.ts, price))

@@ -30,8 +30,16 @@ def apply(state: dict[str, Any], event: MarketEvent) -> bool:
     books: dict[str, dict[str, Any]] = state.setdefault("_books", {})
 
     if event.event_type == EventType.BOOK_SNAPSHOT:
-        bids = _parse_levels(event.payload.get("bids", []))
-        asks = _parse_levels(event.payload.get("asks", []))
+        # Defensive: payload may contain None or non-list values for bids/asks
+        # (corrupt vendor message, MARKET_META misrouted here, test fixtures, ...).
+        raw_bids = event.payload.get("bids")
+        raw_asks = event.payload.get("asks")
+        if not isinstance(raw_bids, list):
+            raw_bids = []
+        if not isinstance(raw_asks, list):
+            raw_asks = []
+        bids = _parse_levels(raw_bids)
+        asks = _parse_levels(raw_asks)
         bids.sort(key=lambda x: x[0], reverse=True)
         asks.sort(key=lambda x: x[0])
         books[event.asset_id] = {
@@ -45,12 +53,17 @@ def apply(state: dict[str, Any], event: MarketEvent) -> bool:
     book = books.get(event.asset_id)
     if book is None:
         return False  # need snapshot first
-    for ch in event.payload.get("changes", []):
-        try:
-            side = (ch.get("side") or "").lower()
-            price = Decimal(str(ch["price"]))
-            size = Decimal(str(ch["size"]))
-        except (KeyError, ValueError):
+    from src.strategies._lib.parsing import safe_decimal
+    raw_changes = event.payload.get("changes")
+    if not isinstance(raw_changes, list):
+        return False
+    for ch in raw_changes:
+        if not isinstance(ch, dict):
+            continue
+        side = (ch.get("side") or "").lower()
+        price = safe_decimal(ch.get("price"))
+        size = safe_decimal(ch.get("size"))
+        if price is None or size is None:
             continue
         levels = book["bids"] if side == "buy" else book["asks"]
         for i, (p, _s) in enumerate(levels):
@@ -72,12 +85,17 @@ def apply(state: dict[str, Any], event: MarketEvent) -> bool:
 
 
 def _parse_levels(raw: list[dict]) -> list[tuple[Decimal, Decimal]]:
+    """Parse a list of {price, size} dicts. Skips any malformed entries
+    (missing keys, None values, non-numeric strings — Decimal(str(None))
+    raises InvalidOperation, NOT ValueError, hence the broad except)."""
+    from src.strategies._lib.parsing import safe_decimal
     out: list[tuple[Decimal, Decimal]] = []
     for level in raw:
-        try:
-            p = Decimal(str(level["price"]))
-            s = Decimal(str(level["size"]))
-        except (KeyError, ValueError):
+        if not isinstance(level, dict):
+            continue
+        p = safe_decimal(level.get("price"))
+        s = safe_decimal(level.get("size"))
+        if p is None or s is None:
             continue
         if s > 0:
             out.append((p, s))

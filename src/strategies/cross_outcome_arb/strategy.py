@@ -59,11 +59,18 @@ class CrossOutcomeArb:
         self.params = CrossOutcomeArbParams(
             **{k: v for k, v in params.items() if k in CrossOutcomeArbParams.__annotations__},
         )
-        # coerce decimal fields
+        # Coerce decimal fields and clamp to sane ranges so a misconfigured
+        # sleeve YAML can't produce nonsensical signals.
         if not isinstance(self.params.max_sum_threshold, Decimal):
             self.params.max_sum_threshold = Decimal(str(self.params.max_sum_threshold))
         if not isinstance(self.params.max_size_per_leg_usd, Decimal):
             self.params.max_size_per_leg_usd = Decimal(str(self.params.max_size_per_leg_usd))
+        if self.params.max_size_per_leg_usd <= 0:
+            self.params.max_size_per_leg_usd = Decimal("200")
+        if self.params.max_sum_threshold <= 0 or self.params.max_sum_threshold > Decimal("1"):
+            self.params.max_sum_threshold = Decimal("0.99")
+        if self.params.min_edge_bps < 0:
+            self.params.min_edge_bps = 0
 
     # ----------------------------------------------------------------------
     # Strategy protocol
@@ -207,13 +214,17 @@ class CrossOutcomeArb:
 
 
 def _parse_asks(payload: dict[str, Any]) -> list[tuple[Decimal, Decimal]]:
+    from src.strategies._lib.parsing import safe_decimal
     raw = payload.get("asks") or []
+    if not isinstance(raw, list):
+        return []
     out: list[tuple[Decimal, Decimal]] = []
     for level in raw:
-        try:
-            price = Decimal(str(level["price"]))
-            size = Decimal(str(level["size"]))
-        except (KeyError, ValueError):
+        if not isinstance(level, dict):
+            continue
+        price = safe_decimal(level.get("price"))
+        size = safe_decimal(level.get("size"))
+        if price is None or size is None:
             continue
         if size > 0:
             out.append((price, size))
@@ -222,13 +233,18 @@ def _parse_asks(payload: dict[str, Any]) -> list[tuple[Decimal, Decimal]]:
 
 
 def _apply_delta(book: dict[str, Any], payload: dict[str, Any]) -> None:
+    from src.strategies._lib.parsing import safe_decimal
     asks: list[tuple[Decimal, Decimal]] = book.setdefault("asks", [])
-    for ch in payload.get("changes", []):
-        try:
-            side = ch.get("side", "").lower()
-            price = Decimal(str(ch["price"]))
-            size = Decimal(str(ch["size"]))
-        except (KeyError, ValueError):
+    raw_changes = payload.get("changes") or []
+    if not isinstance(raw_changes, list):
+        return
+    for ch in raw_changes:
+        if not isinstance(ch, dict):
+            continue
+        side = (ch.get("side") or "").lower()
+        price = safe_decimal(ch.get("price"))
+        size = safe_decimal(ch.get("size"))
+        if price is None or size is None:
             continue
         # We only care about asks for arb detection; bid changes ignored.
         if side != "sell":
