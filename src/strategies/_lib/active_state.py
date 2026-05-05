@@ -24,14 +24,17 @@ ACTIVE_STATE_KEYS: tuple[str, ...] = (
     "_active_fades",       # mean_revert_post_spike       — set[market_id]
     "_active_mom",         # momentum_orderbook           — set[(market_id, asset_id)]
     "_active_orders",      # maker_passive                — set[(market_id, asset_id, side)]
+    "_active_copies",      # whale_copy_eod               — set[(wallet, market_id)]
 )
 
 
 def clear_for_market(state: dict[str, Any], market_id: str) -> int:
     """Remove every entry in known active-state keys that refers to market_id.
 
-    Returns the number of entries removed (across all keys), useful for
-    telemetry / logging.
+    Scans EVERY position in tuple entries (not just index 0) so strategies
+    that key by (wallet, market_id) — like whale_copy_eod — also get cleared.
+
+    Returns the number of entries removed.
     """
     removed = 0
     for key in ACTIVE_STATE_KEYS:
@@ -43,7 +46,7 @@ def clear_for_market(state: dict[str, Any], market_id: str) -> int:
         for entry in bag:
             if entry == market_id:
                 to_remove.append(entry)
-            elif isinstance(entry, tuple) and len(entry) >= 1 and entry[0] == market_id:
+            elif isinstance(entry, tuple) and market_id in entry:
                 to_remove.append(entry)
 
         for entry in to_remove:
