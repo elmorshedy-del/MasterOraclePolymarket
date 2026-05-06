@@ -3,7 +3,7 @@ strategy: mean_revert_post_spike
 config_id: default
 edge_class: directional
 enabled: true
-mode: replay_only
+mode: live_full
 starting_capital_usd: 5000
 
 params:

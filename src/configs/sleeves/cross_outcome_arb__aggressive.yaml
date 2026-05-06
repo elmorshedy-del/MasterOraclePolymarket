@@ -3,7 +3,7 @@ strategy: cross_outcome_arb
 config_id: aggressive
 edge_class: pure_arb
 enabled: false                       # off by default; flip on after default proves out
-mode: replay_only
+mode: live_full
 starting_capital_usd: 5000
 
 params:
