@@ -9,6 +9,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p /app/public
 RUN npm run build
 
 FROM node:20-alpine AS runner
@@ -16,11 +17,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# COPY does not support shell redirection — Docker parses the entire
-# argument as the source path. The earlier `COPY ... 2>/dev/null || true`
-# was invalid syntax that would error or copy a literally-named file.
-# Either /app/public exists in builder (make it explicit) or we skip it.
-RUN mkdir -p /app/public
+# The builder always creates /app/public so this COPY works even when the app
+# has no checked-in public assets.
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
