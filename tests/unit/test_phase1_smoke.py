@@ -107,6 +107,19 @@ def test_polymarket_markets_parses_gamma_clob_token_ids():
     assert meta.asset_ids == ("yes-token", "no-token")
 
 
+def test_polymarket_clob_batches_subscribe_messages():
+    from src.venues.polymarket_clob import SUBSCRIBE_BATCH_SIZE, _subscription_messages
+
+    asset_ids = [f"asset-{i}" for i in range(SUBSCRIBE_BATCH_SIZE + 1)]
+    messages = list(_subscription_messages(asset_ids))
+
+    assert messages[0]["type"] == "market"
+    assert "operation" not in messages[0]
+    assert len(messages[0]["assets_ids"]) == SUBSCRIBE_BATCH_SIZE
+    assert messages[1]["operation"] == "subscribe"
+    assert messages[1]["assets_ids"] == ["asset-100"]
+
+
 def test_news_rss_canonical_url_dedupe_setup():
     """News adapter should construct without errors and have empty seen-set initially."""
     from src.venues.news_rss import NewsRSS

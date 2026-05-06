@@ -97,8 +97,8 @@ class PolymarketCLOB:
     async def start(self) -> None:
         async def _setup(ws):
             # Polymarket subscribe message — batched if list is large.
-            for chunk in _chunks(self._asset_ids, SUBSCRIBE_BATCH_SIZE):
-                await safe_send(ws, {"type": "MARKET", "assets_ids": chunk})
+            for message in _subscription_messages(self._asset_ids):
+                await safe_send(ws, message)
             self.subscribed_assets = len(self._asset_ids)
             logger.info("[polymarket_clob] subscribed to %d assets", self.subscribed_assets)
 
@@ -252,6 +252,22 @@ def _parse_ts(raw) -> datetime:
 def _chunks(seq: list[str], n: int) -> Iterable[list[str]]:
     for i in range(0, len(seq), n):
         yield seq[i : i + n]
+
+
+def _subscription_messages(asset_ids: Iterable[str]) -> Iterable[dict]:
+    for idx, chunk in enumerate(_chunks(list(asset_ids), SUBSCRIBE_BATCH_SIZE)):
+        if idx == 0:
+            yield {
+                "type": "market",
+                "assets_ids": chunk,
+                "custom_feature_enabled": True,
+            }
+        else:
+            yield {
+                "operation": "subscribe",
+                "assets_ids": chunk,
+                "custom_feature_enabled": True,
+            }
 
 
 # ---------------------------------------------------------------------------
