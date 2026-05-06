@@ -173,8 +173,15 @@ CREATE TABLE IF NOT EXISTS paper_fills (
     ts_filled     TIMESTAMPTZ NOT NULL,
     realism_flag  TEXT NOT NULL DEFAULT 'clean',
     gas_cost_usd  NUMERIC(18, 6) NOT NULL DEFAULT 0.10,
+    -- Walk-derived slippage in bps vs book mid at signal time. NULL for
+    -- maker fills, missed fills, or when no mid was available.
+    slippage_bps  NUMERIC(10, 2),
     metadata      JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+
+-- Idempotent column add for existing DBs (CREATE TABLE IF NOT EXISTS
+-- doesn't add columns to a pre-existing table).
+ALTER TABLE paper_fills ADD COLUMN IF NOT EXISTS slippage_bps NUMERIC(10, 2);
 
 CREATE INDEX IF NOT EXISTS idx_paper_fills_sleeve_ts ON paper_fills (sleeve_id, ts_filled);
 
@@ -197,6 +204,11 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     pnl_after_haircut_usd NUMERIC(18, 6),
     realism_flag          TEXT NOT NULL DEFAULT 'clean',
     fill_type             TEXT NOT NULL,
+    -- Size-weighted average slippage_bps across entry + exit fills.
+    -- Surfaced in the matrix as a pivot dimension (slippage_bucket) and
+    -- on the sleeve scorecard. Replaces the old literature-based haircut
+    -- as the headline measure of gap-to-real-money.
+    slippage_bps          NUMERIC(10, 2),
     -- denormalized analytics tags (one column per dimension for fast pivot)
     market_category            TEXT,
     market_subcategory         TEXT,
@@ -212,6 +224,9 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     tags_extra            JSONB NOT NULL DEFAULT '{}'::jsonb,
     source                TEXT NOT NULL DEFAULT 'live'  -- 'live' | 'replay'
 );
+
+-- Idempotent column add for existing DBs.
+ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS slippage_bps NUMERIC(10, 2);
 
 CREATE INDEX IF NOT EXISTS idx_paper_trades_sleeve_ts ON paper_trades (sleeve_id, entry_ts);
 CREATE INDEX IF NOT EXISTS idx_paper_trades_category  ON paper_trades (market_category);

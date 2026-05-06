@@ -206,6 +206,21 @@ class EventReplayFillSimulator:
         if total_size <= 0:
             return None
         wavg_price = sum(p * s for p, s in consumed) / total_size
+        wavg_price = Decimal(wavg_price).quantize(Decimal("0.000001"))
+
+        # Slippage_bps vs the book MID at signal time. This is the honest
+        # measure of "what the walk cost us" — replaces the old literature-
+        # based realism haircut. For a buy: positive bps = we paid above mid
+        # (adverse); for a sell: positive bps = we sold below mid (also
+        # adverse). The sign is always "cost to us" so it sorts intuitively.
+        mid = book.mid()
+        slippage_bps: Decimal | None = None
+        if mid is not None and mid > 0:
+            if order.side == Side.BUY:
+                raw = (wavg_price - mid) / mid
+            else:
+                raw = (mid - wavg_price) / mid
+            slippage_bps = (raw * Decimal("10000")).quantize(Decimal("0.01"))
 
         return Fill(
             fill_id=uuid4(),
@@ -214,12 +229,13 @@ class EventReplayFillSimulator:
             market_id=order.market_id,
             asset_id=order.asset_id,
             side=order.side,
-            price=Decimal(wavg_price).quantize(Decimal("0.000001")),
+            price=wavg_price,
             size=total_size,
             fill_type=FillType.TAKER,
             ts_filled=order.ts_placed,
             realism_flag=flag,
             gas_cost=self.gas_cost,
+            slippage_bps=slippage_bps,
             metadata={
                 "levels_walked": len(consumed),
                 "best_level_price": str(consumed[0][0]),

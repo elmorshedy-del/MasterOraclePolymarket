@@ -49,6 +49,10 @@ class Position:
     opened_at: datetime
     last_updated: datetime
     total_gas_paid: Decimal = Decimal(0)
+    # Size-weighted average slippage_bps across all entry fills. Used to
+    # propagate the entry-side slippage cost into the Trade row when the
+    # position eventually closes.
+    weighted_entry_slippage_bps: Decimal = Decimal(0)
 
 
 @dataclass
@@ -131,6 +135,7 @@ class PositionTracker:
             )
 
         # Adding to (or opening) same-side position
+        fill_slip = fill.slippage_bps if fill.slippage_bps is not None else Decimal(0)
         if existing is None:
             self._positions[same_key] = Position(
                 sleeve_id=fill.sleeve_id,
@@ -142,11 +147,17 @@ class PositionTracker:
                 opened_at=fill.ts_filled,
                 last_updated=fill.ts_filled,
                 total_gas_paid=fill.gas_cost,
+                weighted_entry_slippage_bps=fill_slip,
             )
         else:
             new_size = existing.size + fill.size
             existing.avg_entry = (
                 (existing.avg_entry * existing.size + fill.price * fill.size) / new_size
+            )
+            # Size-weighted average of slippage across all entry fills.
+            existing.weighted_entry_slippage_bps = (
+                (existing.weighted_entry_slippage_bps * existing.size + fill_slip * fill.size)
+                / new_size
             )
             existing.size = new_size
             existing.last_updated = fill.ts_filled
@@ -276,6 +287,13 @@ class PositionTracker:
         if position.size <= 0:
             del self._positions[position_key]
 
+        # Average entry-side slippage (already size-weighted on the position)
+        # plus this exit-fill's slippage, weighted across both legs.
+        exit_slip = fill.slippage_bps if fill.slippage_bps is not None else Decimal(0)
+        avg_slippage_bps = (
+            (position.weighted_entry_slippage_bps + exit_slip) / Decimal(2)
+        ).quantize(Decimal("0.01"))
+
         trade = Trade(
             trade_id=uuid4(),
             sleeve_id=fill.sleeve_id,
@@ -294,6 +312,7 @@ class PositionTracker:
             pnl_after_haircut=pnl_after,
             realism_flag=fill.realism_flag,
             fill_type=fill.fill_type,
+            slippage_bps=avg_slippage_bps,
             tags={
                 "config_hash": config_hash,
                 "edge_class": edge_class,

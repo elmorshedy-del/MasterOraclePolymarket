@@ -359,3 +359,109 @@ Total platform effort: ~4 weeks. Strategies thereafter on individual cycles.
 - Sports Odds API ($30/mo) — defer; sports outcomes are downloadable historical
 - Kalshi trading account / cross-venue real money — out of V1 scope
 - Real-money calibration wallet — opt-in feature, off until user funds it
+
+---
+
+# 15. CHANGELOG — what evolved after the original plan
+
+The sections above (1–14) are the **original plan as written before any
+implementation**. Every change since is appended here so we always have
+both: what the plan was, and what we learned that changed it. Anything in
+this section overrides the original where they disagree; nothing is
+deleted from §1–14.
+
+## 15.1 — Honest slippage replaces the literature-based haircut
+
+> **Inspired by:** `agent-next/polymarket-paper-trader`'s stance —
+> *"paper P&L matches real P&L within the spread."* Their argument: walking
+> the actual orderbook level-by-level produces measurable slippage; you
+> don't need a generic haircut on top of that.
+
+**Original plan (§3):** apply a flat **−22% realism haircut** to all
+displayed P&L, justified by Aldridge (2013) / Brogaard et al. (2014) /
+Hendershott et al. (2013) — HFT-equity literature on paper-to-live
+degradation. Per-edge-class overrides (`pure_arb` −18%, `maker` −38%,
+`tail` −25%, etc.) layered on top. The haircut was the headline number
+on the dashboard.
+
+**What we learned:**
+- The cited literature is for **HFT in equities**, not Polymarket binary
+  prediction markets. Different microstructure (continuous vs binary
+  outcomes, different spreads, different counterparty mix). Borrowing a
+  flat constant from one to estimate the other is unprincipled.
+- We were already walking the book level-by-level in `_fill_taker`. The
+  slippage was being **computed and discarded**.
+- The single largest, measurable, unambiguous gap from paper to real money
+  on Polymarket is **the spread you cross when you take liquidity**. We
+  can measure it per trade.
+
+**What changed:**
+- `Fill.slippage_bps` and `Trade.slippage_bps` added as first-class data
+  fields, computed in `_fill_taker` from the walk it already did.
+- Sign convention: positive bps always means "cost to us" (paid above mid
+  on a buy, sold below mid on a sell), so it sorts intuitively.
+- Schema: `paper_fills.slippage_bps` and `paper_trades.slippage_bps`
+  columns added with idempotent `ALTER TABLE ADD COLUMN IF NOT EXISTS`,
+  so existing DBs migrate cleanly without data loss.
+- New metric plugin `avg_slippage_bps` (lower-is-better) appears on every
+  sleeve scorecard.
+- New pivot dimension `slippage_bucket` on the matrix page
+  (0-10bps / 10-25 / 25-50 / 50-100 / 100+). The matrix can now slice P&L
+  by measured friction.
+- The realism haircut is **kept in the data model** (`pnl_after_haircut_usd`)
+  and the per-edge-class overrides remain in `runtime.yaml` for
+  backwards-compat with already-recorded trades — but it's **demoted from
+  the headline**. The new headline metric for "what this strategy actually
+  costs to run" is `avg_slippage_bps + gas + picked_off_rate`.
+
+**What this means in practice:**
+- A pure-arb strategy with 5 bps avg slippage has a 5 bps gap to real
+  money, not 18%.
+- A maker strategy whose fills overwhelmingly carry `picked_off=True` has
+  the picked-off rate as its honest gap, not 38%.
+- A directional strategy with 80 bps avg slippage tells you the strategy's
+  edge has to clear 80 bps + gas + execution latency — all measurable.
+
+## 15.2 — Stale-book REST fallback (live_full only)
+
+> **Inspired by:** `agent-next/polymarket-paper-trader`'s "no caching,
+> always live from API" rule. They eliminate WS-vs-reality drift entirely
+> by never trusting a cached book.
+
+**Original plan:** the in-memory `OrderBookStore` (populated by the
+Polymarket WS feed) is the canonical source for fill-time book lookups.
+
+**What we learned:** during reconnect / backoff / network blips, the WS
+can fall behind the actual book by seconds to minutes. Walking a stale
+book defeats the slippage-honesty stance — we'd be paying yesterday's
+prices.
+
+**What changed:**
+- `Runner._refresh_stale_book_if_needed` checks `book.last_update_ts`
+  against `STALE_BOOK_THRESHOLD_SECS = 2.0` before submitting any
+  `live_full` order.
+- If older than the threshold, calls `PolymarketCLOB.fetch_book_rest`
+  which hits the REST `/book?token_id=...` endpoint and replaces the
+  snapshot in STORE.
+- Replay mode is **unaffected** — replay must use the recorded book at
+  the simulated event time; that's the right behavior there.
+- Best-effort: if the REST call fails, we proceed with the stale book
+  rather than refusing the order. The realism flag system still tags
+  the trade. The trade-off: occasional stale fills are honest about their
+  staleness; refusing the order would hide trade activity entirely.
+
+## 15.3 — Original 22% haircut: kept in data, hidden in UI
+
+To preserve the historical record, this CHANGELOG and the original §3
+are both authoritative for the data they describe:
+
+- **Pre-existing trades** in the DB carry `pnl_after_haircut_usd`
+  computed with the literature-based haircut. The API still returns it
+  for those rows.
+- **New trades** carry both `pnl_after_haircut_usd` (legacy) AND
+  `slippage_bps` (new headline). The dashboard UI shows the slippage
+  tile on the sleeve scorecard and the slippage_bucket dimension on the
+  matrix.
+- The **literature haircut justification in §3 is preserved** above
+  because that's what was true when those rows were written. It is no
+  longer the recommended interpretation of headline P&L going forward.

@@ -3,7 +3,7 @@ strategy: whale_copy_eod
 config_id: default
 edge_class: copy
 enabled: true
-mode: replay_only
+mode: live_full
 starting_capital_usd: 5000
 
 params:

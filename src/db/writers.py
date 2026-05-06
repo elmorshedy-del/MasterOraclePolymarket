@@ -173,8 +173,8 @@ async def insert_fill(fill: Fill) -> None:
             INSERT INTO paper_fills
                 (fill_id, order_id, sleeve_id, market_id, asset_id,
                  side, price, size, fill_type, ts_filled, realism_flag,
-                 gas_cost_usd, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
+                 gas_cost_usd, slippage_bps, metadata)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)
             ON CONFLICT (fill_id) DO NOTHING
             """,
             fill.fill_id,
@@ -189,6 +189,7 @@ async def insert_fill(fill: Fill) -> None:
             fill.ts_filled,
             fill.realism_flag.value,
             float(fill.gas_cost),
+            float(fill.slippage_bps) if fill.slippage_bps is not None else None,
             orjson.dumps(_jsonable(fill.metadata)).decode(),
         )
 
@@ -304,11 +305,11 @@ async def insert_trade(trade: Trade, config_hash: str, source: str = "live") -> 
                  entry_price, entry_size, entry_ts,
                  exit_price, exit_size, exit_ts,
                  pnl_usd, pnl_after_haircut_usd,
-                 realism_flag, fill_type,
+                 realism_flag, fill_type, slippage_bps,
                  tags_extra, source)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
                     $9, $10, $11, $12, $13, $14,
-                    $15, $16, $17, $18, $19::jsonb, $20)
+                    $15, $16, $17, $18, $19, $20::jsonb, $21)
             ON CONFLICT (trade_id) DO NOTHING
             """,
             trade.trade_id,
@@ -329,6 +330,7 @@ async def insert_trade(trade: Trade, config_hash: str, source: str = "live") -> 
             float(trade.pnl_after_haircut) if trade.pnl_after_haircut is not None else None,
             trade.realism_flag.value,
             trade.fill_type.value,
+            float(trade.slippage_bps) if trade.slippage_bps is not None else None,
             orjson.dumps(_jsonable(trade.tags)).decode(),
             source,
         )

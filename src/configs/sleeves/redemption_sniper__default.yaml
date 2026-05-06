@@ -3,7 +3,7 @@ strategy: redemption_sniper
 config_id: default
 edge_class: slow
 enabled: true
-mode: replay_only
+mode: live_full
 starting_capital_usd: 5000
 
 params:

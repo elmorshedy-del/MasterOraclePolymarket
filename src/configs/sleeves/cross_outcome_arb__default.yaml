@@ -3,7 +3,7 @@ strategy: cross_outcome_arb
 config_id: default
 edge_class: pure_arb
 enabled: true
-mode: replay_only                    # promote to live_log after synthetic + replay tests pass
+mode: live_full
 starting_capital_usd: 5000
 
 params:

@@ -230,6 +230,7 @@ async def recent_trades(
                        entry_price, exit_price, entry_size,
                        entry_ts, exit_ts,
                        pnl_usd, pnl_after_haircut_usd, realism_flag, fill_type, source,
+                       slippage_bps,
                        market_category, market_subcategory, liquidity_bucket, entry_price_bucket,
                        time_to_resolution_bucket, orderbook_state_bucket, time_of_day_bucket,
                        day_of_week, news_regime, counterparty_estimate
@@ -278,7 +279,22 @@ _PIVOT_COLUMNS = {
     "liquidity_bucket", "entry_price_bucket", "time_to_resolution_bucket",
     "orderbook_state_bucket", "time_of_day_bucket", "day_of_week",
     "news_regime", "counterparty_estimate", "fill_type", "realism_flag", "source",
+    "slippage_bucket",
 }
+
+# Synthetic pivot column: slippage_bps bucketed for the matrix heatmap.
+# (See agent-next/polymarket-paper-trader's stance — slippage IS the
+# measurable gap-to-real-money. We expose it as a pivot dimension.)
+_SLIPPAGE_BUCKET_SQL = """
+    CASE
+        WHEN slippage_bps IS NULL THEN 'unknown'
+        WHEN slippage_bps < 10 THEN '0-10bps'
+        WHEN slippage_bps < 25 THEN '10-25bps'
+        WHEN slippage_bps < 50 THEN '25-50bps'
+        WHEN slippage_bps < 100 THEN '50-100bps'
+        ELSE '100bps+'
+    END
+"""
 
 
 @app.get("/analytics/pivot")
@@ -303,20 +319,29 @@ async def analytics_pivot(
         return {"row_dim": row, "col_dim": col, "metric": metric, "cells": []}
 
     since = datetime.now(tz=UTC) - timedelta(hours=hours)
+
+    def _expr(dim: str) -> str:
+        # slippage_bucket isn't a real column; emit the bucketing CASE
+        # inline so it can appear in either row or col position.
+        return _SLIPPAGE_BUCKET_SQL if dim == "slippage_bucket" else dim
+
+    row_expr = _expr(row)
+    col_expr = _expr(col)
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             f"""
             SELECT
-                {row} AS row_key,
-                {col} AS col_key,
+                {row_expr} AS row_key,
+                {col_expr} AS col_key,
                 COALESCE(SUM(pnl_after_haircut_usd), 0)::float AS total_pnl,
                 COUNT(*) AS trade_count,
                 AVG(CASE WHEN pnl_after_haircut_usd > 0 THEN 1.0 ELSE 0.0 END)::float AS win_rate,
-                AVG(pnl_after_haircut_usd)::float AS avg_pnl
+                AVG(pnl_after_haircut_usd)::float AS avg_pnl,
+                AVG(slippage_bps)::float AS avg_slippage_bps
             FROM paper_trades
             WHERE entry_ts >= $1
-            GROUP BY {row}, {col}
-            ORDER BY {row}, {col}
+            GROUP BY {row_expr}, {col_expr}
+            ORDER BY 1, 2
             """,
             since,
         )

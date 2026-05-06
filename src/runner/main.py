@@ -422,6 +422,16 @@ class Runner:
 
         book = STORE.get(signal.market_id, signal.asset_id) or book
 
+        # Stale-book fallback (live_full only): if our in-memory book hasn't
+        # received a WS update in STALE_BOOK_THRESHOLD_SECS, refresh it from
+        # Polymarket's REST /book endpoint before submitting. The walking-
+        # the-book honesty stance only holds if the book we walk reflects
+        # current liquidity. Replay path is unaffected — it uses the recorded
+        # book at the simulated event time, which is the right behavior there.
+        if runner.mode == RuntimeMode.LIVE_FULL:
+            await self._refresh_stale_book_if_needed(book, signal.market_id, signal.asset_id)
+            book = STORE.get(signal.market_id, signal.asset_id) or book
+
         try:
             fills = await self.fill_simulator.submit(order, book)
         except Exception:
@@ -492,6 +502,55 @@ class Runner:
             if r.sleeve.sleeve.sleeve_id == sleeve_id:
                 return r
         return None
+
+    # How old can our in-memory book be before we hit the REST /book endpoint
+    # for a fresh snapshot. Bigger than 2s and the walk-the-book stance starts
+    # to leak — it's not honest if you're walking a stale book.
+    STALE_BOOK_THRESHOLD_SECS = 2.0
+
+    async def _refresh_stale_book_if_needed(
+        self,
+        book,
+        market_id: str,
+        asset_id: str,
+    ) -> None:
+        """If the in-memory book is older than STALE_BOOK_THRESHOLD_SECS, hit
+        Polymarket's REST /book endpoint and replace the cached snapshot.
+
+        Borrowed-honesty pattern from agent-next/polymarket-paper-trader: the
+        slippage walk only matches reality if the book it walks reflects
+        current liquidity. WS deltas usually keep STORE current within ms,
+        but on reconnect or laggy links the gap can grow.
+
+        Best-effort: if the REST hit fails, we proceed with the stale book
+        rather than refusing the order. The realism flag system still tags
+        the trade.
+        """
+        if book is None or book.last_update_ts is None:
+            return
+        try:
+            now = datetime.now(tz=UTC)
+            age = (now - book.last_update_ts).total_seconds()
+        except Exception:  # noqa: BLE001
+            return
+        if age <= self.STALE_BOOK_THRESHOLD_SECS:
+            return
+
+        # Find the polymarket_clob venue and ask it to refresh this asset.
+        clob = next(
+            (v for v in self.venues if getattr(v, "name", None) == "polymarket_clob"),
+            None,
+        )
+        if clob is None or not hasattr(clob, "fetch_book_rest"):
+            return  # no REST helper wired; skip cleanly
+
+        try:
+            await clob.fetch_book_rest(market_id, asset_id)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "[stale_book] REST refresh failed for %s/%s (age=%.1fs); proceeding with cached",
+                market_id, asset_id, age,
+            )
 
     def _signal_within_risk_caps(self, signal, runner: StrategyRunner) -> bool:
         """Check sleeve-level caps from the YAML before forwarding to fills.
