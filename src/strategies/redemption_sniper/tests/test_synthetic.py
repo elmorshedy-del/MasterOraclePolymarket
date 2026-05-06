@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -34,7 +34,7 @@ def _snap(market_id: str, asset_id: str, ask: str,
         venue="polymarket",
         market_id=market_id,
         asset_id=asset_id,
-        ts=ts or datetime.now(tz=timezone.utc),
+        ts=ts or datetime.now(tz=UTC),
         payload={
             "asks": [{"price": ask, "size": "100"}],
             "bids": [{"price": "0.50", "size": "100"}],
@@ -50,7 +50,7 @@ def _trade(market_id: str, asset_id: str, price: str,
         venue="polymarket",
         market_id=market_id,
         asset_id=asset_id,
-        ts=ts or datetime.now(tz=timezone.utc),
+        ts=ts or datetime.now(tz=UTC),
         payload={"price": price, "size": "10", "side": "sell"},
     )
 
@@ -59,7 +59,7 @@ def _trade(market_id: str, asset_id: str, price: str,
 async def test_fires_inside_window_and_price_band():
     strat = RedemptionSniper()
     state: dict = {}
-    now = datetime(2026, 4, 29, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 29, 12, tzinfo=UTC)
     end = now + timedelta(minutes=30)  # within 1h window
 
     await strat.on_event(_meta("m1", end, ["yes"]), state)
@@ -74,7 +74,7 @@ async def test_fires_inside_window_and_price_band():
 async def test_outside_time_window_does_not_fire():
     strat = RedemptionSniper()
     state: dict = {}
-    now = datetime(2026, 4, 29, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 29, 12, tzinfo=UTC)
     end = now + timedelta(hours=24)  # well outside 1h window
 
     await strat.on_event(_meta("m1", end, ["yes"]), state)
@@ -86,7 +86,7 @@ async def test_outside_time_window_does_not_fire():
 async def test_outside_price_band_does_not_fire():
     strat = RedemptionSniper()
     state: dict = {}
-    now = datetime(2026, 4, 29, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 29, 12, tzinfo=UTC)
     end = now + timedelta(minutes=30)
     await strat.on_event(_meta("m1", end, ["yes"]), state)
 
@@ -102,7 +102,7 @@ async def test_outside_price_band_does_not_fire():
 async def test_adverse_print_blocks_fire():
     strat = RedemptionSniper()
     state: dict = {}
-    now = datetime(2026, 4, 29, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 29, 12, tzinfo=UTC)
     end = now + timedelta(minutes=30)
 
     await strat.on_event(_meta("m1", end, ["yes"]), state)
@@ -116,7 +116,7 @@ async def test_adverse_print_blocks_fire():
 async def test_adverse_print_outside_window_does_not_block():
     strat = RedemptionSniper(recent_window_secs=60)
     state: dict = {}
-    now = datetime(2026, 4, 29, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 29, 12, tzinfo=UTC)
     end = now + timedelta(minutes=30)
 
     await strat.on_event(_meta("m1", end, ["yes"]), state)
@@ -138,7 +138,7 @@ async def test_no_meta_means_no_fire():
 async def test_does_not_re_snipe_same_asset():
     strat = RedemptionSniper()
     state: dict = {}
-    now = datetime(2026, 4, 29, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 29, 12, tzinfo=UTC)
     end = now + timedelta(minutes=30)
 
     await strat.on_event(_meta("m1", end, ["yes"]), state)

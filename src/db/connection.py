@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 import asyncpg
 from tenacity import (
@@ -22,7 +21,7 @@ from tenacity import (
 logger = logging.getLogger(__name__)
 
 
-_pool: Optional[asyncpg.Pool] = None
+_pool: asyncpg.Pool | None = None
 
 
 def _normalize_url(url: str) -> str:

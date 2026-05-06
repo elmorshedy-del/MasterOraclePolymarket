@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import math
-from decimal import Decimal
 
 from src.core.events import Trade
-
 
 # We treat each trade as an independent observation and annualize against
 # an assumed 252 trading days × ~10 trades/day = 2520 observations/yr as a

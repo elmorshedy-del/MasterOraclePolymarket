@@ -19,13 +19,11 @@ The cancel-decay factor is exposed for future calibration but defaults to
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from uuid import UUID
 
 from src.core.events import (
-    EventType,
     Fill,
     FillType,
     MarketEvent,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -26,7 +26,7 @@ def _fill(side, price, size, sleeve="s", market="m", asset="a", ftype=FillType.T
         price=Decimal(price),
         size=Decimal(size),
         fill_type=ftype,
-        ts_filled=datetime.now(tz=timezone.utc),
+        ts_filled=datetime.now(tz=UTC),
         realism_flag=RealismFlag.CLEAN,
         gas_cost=Decimal("0.10"),
     )

@@ -30,7 +30,7 @@ class MetricService:
         for m in self.metrics:
             try:
                 out[m.name] = m.compute(trades)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("metric %s raised", m.name)
                 out[m.name] = float("nan")
         return out

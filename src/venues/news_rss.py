@@ -17,13 +17,12 @@ import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import feedparser
 
 from src.core.events import EventType, MarketEvent, MarketMeta
-from src.core.interfaces import MarketDataSource
 
 logger = logging.getLogger(__name__)
 
@@ -93,11 +92,11 @@ class NewsRSS:
                 for ev in items:
                     yield ev
                     self.events_emitted += 1
-            self.last_poll_at = datetime.now(tz=timezone.utc)
+            self.last_poll_at = datetime.now(tz=UTC)
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.poll_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def list_markets(self) -> Iterable[MarketMeta]:
@@ -111,13 +110,13 @@ class NewsRSS:
                 parsed = await asyncio.to_thread(feedparser.parse, url)
                 for entry in parsed.entries:
                     self._seen_urls.add(_canonical_url(entry))
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.warning("[news_rss] seed failed for %s", source)
 
     async def _fetch_feed(self, source: str, url: str) -> list[MarketEvent]:
         try:
             parsed = await asyncio.to_thread(feedparser.parse, url)
-        except Exception:  # noqa: BLE001
+        except Exception:
             self.fetch_failures += 1
             return []
 
@@ -163,8 +162,8 @@ def _entry_ts(entry) -> datetime:
         or getattr(entry, "updated_parsed", None)
     )
     if parsed is None:
-        return datetime.now(tz=timezone.utc)
-    return datetime(*parsed[:6], tzinfo=timezone.utc)
+        return datetime.now(tz=UTC)
+    return datetime(*parsed[:6], tzinfo=UTC)
 
 
 def plugin() -> NewsRSS:

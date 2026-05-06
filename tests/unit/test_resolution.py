@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
-
-import pytest
 
 from src.core.events import (
     Fill,
@@ -32,7 +30,7 @@ def _fill(side, price, size, sleeve="s", market="m", asset="a"):
         price=Decimal(price),
         size=Decimal(size),
         fill_type=FillType.TAKER,
-        ts_filled=datetime.now(tz=timezone.utc),
+        ts_filled=datetime.now(tz=UTC),
         realism_flag=RealismFlag.CLEAN,
         gas_cost=Decimal("0.10"),
     )
@@ -47,7 +45,7 @@ def test_redeem_market_winner_pays_one_dollar():
     trades = pt.redeem_market(
         market_id="m",
         winning_asset_id="a",
-        ts=datetime.now(tz=timezone.utc),
+        ts=datetime.now(tz=UTC),
     )
     assert len(trades) == 1
     t = trades[0]
@@ -67,7 +65,7 @@ def test_redeem_market_loser_zero_payout():
     trades = pt.redeem_market(
         market_id="m",
         winning_asset_id="winning_token",      # different from our holding
-        ts=datetime.now(tz=timezone.utc),
+        ts=datetime.now(tz=UTC),
     )
     assert len(trades) == 1
     assert trades[0].exit_price == Decimal("0")
@@ -83,7 +81,7 @@ def test_redeem_market_unknown_winner_closes_at_avg_entry():
     trades = pt.redeem_market(
         market_id="m",
         winning_asset_id=None,
-        ts=datetime.now(tz=timezone.utc),
+        ts=datetime.now(tz=UTC),
     )
     assert len(trades) == 1
     # Closing at avg_entry → raw pnl = 0, minus gas
@@ -97,7 +95,7 @@ def test_redeem_market_no_open_positions_is_noop():
     trades = pt.redeem_market(
         market_id="m",
         winning_asset_id="a",
-        ts=datetime.now(tz=timezone.utc),
+        ts=datetime.now(tz=UTC),
     )
     assert trades == []
 

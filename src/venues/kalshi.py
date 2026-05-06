@@ -18,13 +18,12 @@ import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import httpx
 
 from src.core.events import EventType, MarketEvent, MarketMeta
-from src.core.interfaces import MarketDataSource
 
 logger = logging.getLogger(__name__)
 
@@ -85,13 +84,13 @@ class Kalshi:
                     if event is not None:
                         yield event
                         self.events_emitted += 1
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     logger.warning("[kalshi] %s fetch failed: %s", ticker, exc)
-            self.last_poll_at = datetime.now(tz=timezone.utc)
+            self.last_poll_at = datetime.now(tz=UTC)
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.poll_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def list_markets(self) -> Iterable[MarketMeta]:
@@ -123,7 +122,7 @@ class Kalshi:
                 return None
             try:
                 return (Decimal(str(v)) / Decimal(100)).quantize(Decimal("0.0001"))
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
 
         bid = _cents_to_prob(bid_raw)
@@ -132,7 +131,7 @@ class Kalshi:
 
         # Use ticker as both market_id and asset_id for now; in §1 mapping
         # work, we'll join Kalshi tickers to Polymarket conditionIds.
-        ts = datetime.now(tz=timezone.utc)
+        ts = datetime.now(tz=UTC)
         return MarketEvent.make(
             event_type=EventType.BOOK_SNAPSHOT,
             venue=VENUE,

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from src.analytics.tags.counterparty_estimate import CounterpartyEstimateTag, SHARP_WALLETS
+from src.analytics.tags.counterparty_estimate import SHARP_WALLETS, CounterpartyEstimateTag
 from src.analytics.tags.day_of_week import DayOfWeekTag
 from src.analytics.tags.entry_price_bucket import EntryPriceBucketTag
 from src.analytics.tags.liquidity_bucket import LiquidityBucketTag
@@ -27,7 +27,7 @@ def _trade(price: float = 0.50, ts: datetime | None = None) -> Trade:
         side=Side.BUY,
         entry_price=Decimal(str(price)),
         entry_size=Decimal("100"),
-        entry_ts=ts or datetime(2026, 4, 27, 10, 30, tzinfo=timezone.utc),
+        entry_ts=ts or datetime(2026, 4, 27, 10, 30, tzinfo=UTC),
         exit_price=None, exit_size=None, exit_ts=None,
         pnl=None, pnl_after_haircut=None,
         realism_flag=RealismFlag.CLEAN, fill_type=FillType.TAKER,
@@ -45,7 +45,7 @@ def test_entry_price_bucket():
 
 def test_time_of_day_bucket_uses_utc_hour():
     p = TimeOfDayBucketTag()
-    base = datetime(2026, 4, 27, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 27, tzinfo=UTC)
     assert p.tag_trade(_trade(ts=base.replace(hour=2)),  {}) == "0-6"
     assert p.tag_trade(_trade(ts=base.replace(hour=8)),  {}) == "6-12"
     assert p.tag_trade(_trade(ts=base.replace(hour=14)), {}) == "12-18"
@@ -54,9 +54,9 @@ def test_time_of_day_bucket_uses_utc_hour():
 
 def test_day_of_week_monday_is_zero():
     # 2026-04-27 is a Monday
-    assert DayOfWeekTag().tag_trade(_trade(ts=datetime(2026, 4, 27, tzinfo=timezone.utc)), {}) == 0
+    assert DayOfWeekTag().tag_trade(_trade(ts=datetime(2026, 4, 27, tzinfo=UTC)), {}) == 0
     # Sunday → 6
-    assert DayOfWeekTag().tag_trade(_trade(ts=datetime(2026, 5, 3, tzinfo=timezone.utc)), {}) == 6
+    assert DayOfWeekTag().tag_trade(_trade(ts=datetime(2026, 5, 3, tzinfo=UTC)), {}) == 6
 
 
 def test_liquidity_bucket_thresholds():
@@ -119,7 +119,7 @@ def test_counterparty_estimate_buckets():
 
 def test_time_to_resolution_bucket():
     p = TimeToResolutionBucketTag()
-    entry = datetime(2026, 4, 27, 10, 0, tzinfo=timezone.utc)
+    entry = datetime(2026, 4, 27, 10, 0, tzinfo=UTC)
     assert p.tag_trade(_trade(ts=entry), {"end_time": entry + timedelta(minutes=30)}) == "<1h"
     assert p.tag_trade(_trade(ts=entry), {"end_time": entry + timedelta(hours=10)}) == "1-24h"
     assert p.tag_trade(_trade(ts=entry), {"end_time": entry + timedelta(days=3)}) == "1-7d"

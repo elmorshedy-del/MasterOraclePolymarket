@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from src.db.connection import get_pool
@@ -67,14 +67,14 @@ class FillValidator:
             try:
                 await self._run_passes()
                 self.runs_completed += 1
-                self.last_run_ts = datetime.now(tz=timezone.utc)
-            except Exception as exc:  # noqa: BLE001
+                self.last_run_ts = datetime.now(tz=UTC)
+            except Exception as exc:
                 self.last_error = repr(exc)
                 logger.exception("fill validator run failed: %s", exc)
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.run_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def _run_passes(self) -> None:
@@ -88,7 +88,7 @@ class FillValidator:
 
     async def _validate_tentative_fills(self, pool) -> None:
         """Mark fills IMPLAUSIBLE if their price was outside trading range."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         window_end = now - timedelta(seconds=TENTATIVE_WINDOW_SECS)
 
         async with pool.acquire() as conn:
@@ -152,7 +152,7 @@ class FillValidator:
 
     async def _check_adverse_selection(self, pool) -> None:
         """Tag maker fills PICKED_OFF if price moved adversely in 60s post-fill."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         eligible_max = now - timedelta(seconds=ADVERSE_LOOKAHEAD_SECS + 30)
 
         async with pool.acquire() as conn:

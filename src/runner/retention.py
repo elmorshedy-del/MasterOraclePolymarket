@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.db.connection import get_pool
 
@@ -67,17 +67,17 @@ class Retention:
             try:
                 await self._sweep()
                 self.runs_completed += 1
-                self.last_run_ts = datetime.now(tz=timezone.utc)
-            except Exception as exc:  # noqa: BLE001
+                self.last_run_ts = datetime.now(tz=UTC)
+            except Exception as exc:
                 logger.exception("retention run failed: %s", exc)
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.run_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def _sweep(self) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         events_cutoff = now - timedelta(days=self.events_retention_days)
         bars_cutoff = now - timedelta(days=self.bars_1m_retention_days)
         signals_cutoff = now - timedelta(days=self.signals_retention_days)

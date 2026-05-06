@@ -10,10 +10,9 @@ share no logic — each venue's adapter calls ``apply_*`` methods directly.
 from __future__ import annotations
 
 import threading
-from collections import defaultdict
+from collections.abc import Iterable
 from datetime import datetime
 from decimal import Decimal
-from typing import Iterable
 
 from src.core.events import OrderBook, PriceLevel, Side
 

@@ -15,10 +15,9 @@ import asyncio
 import logging
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from src.runner.replay_engine import ReplayEngine, ReplayOverrides, ReplayResult
 
@@ -36,7 +35,7 @@ class ReplayJob:
     starting_capital: Decimal = Decimal("5000")
     edge_class: str | None = None
     overrides: ReplayOverrides = field(default_factory=ReplayOverrides)
-    submitted_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    submitted_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
 
     status: str = "queued"        # queued | running | completed | failed
     result: ReplayResult | None = None
@@ -91,13 +90,13 @@ class ReplayQueue:
                 self._notify.clear()
                 try:
                     await asyncio.wait_for(self._notify.wait(), timeout=5.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 continue
 
             job = self._queue.popleft()
             job.status = "running"
-            job.started_at = datetime.now(tz=timezone.utc)
+            job.started_at = datetime.now(tz=UTC)
 
             try:
                 result = await self._engine.run(
@@ -112,12 +111,12 @@ class ReplayQueue:
                 )
                 job.result = result
                 job.status = "completed"
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.exception("replay job %s failed", job.job_id)
                 job.error = repr(exc)
                 job.status = "failed"
             finally:
-                job.finished_at = datetime.now(tz=timezone.utc)
+                job.finished_at = datetime.now(tz=UTC)
 
 
 _queue_singleton: ReplayQueue | None = None

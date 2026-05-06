@@ -16,13 +16,12 @@ trade-level outputs).
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 
 from src.runner.replay_engine import ReplayEngine, ReplayOverrides
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -39,7 +38,7 @@ def has_db() -> bool:
 
 @pytest.fixture(scope="module")
 def replay_window():
-    end = datetime.now(tz=timezone.utc)
+    end = datetime.now(tz=UTC)
     start = end - timedelta(days=30)
     return start, end
 

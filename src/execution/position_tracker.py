@@ -21,11 +21,10 @@ Note: redemption-at-resolution is a separate code path (Phase 4).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
-from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from src.core.config import HaircutConfig
 from src.core.events import (

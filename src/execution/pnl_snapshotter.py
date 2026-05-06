@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from src.db.connection import get_pool
@@ -57,13 +57,13 @@ class PnLSnapshotter:
             try:
                 await self._snapshot_once()
                 self.runs_completed += 1
-                self.last_run_ts = datetime.now(tz=timezone.utc)
-            except Exception as exc:  # noqa: BLE001
+                self.last_run_ts = datetime.now(tz=UTC)
+            except Exception as exc:
                 logger.exception("pnl snapshot failed: %s", exc)
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.run_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def _snapshot_once(self) -> None:
@@ -82,7 +82,7 @@ class PnLSnapshotter:
         except RuntimeError:
             return
 
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         rows: list[tuple] = []
         for sleeve_id in self.position_tracker.all_sleeve_ids():
             pnl = self.position_tracker.pnl(sleeve_id, mark_prices=mark_prices)

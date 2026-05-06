@@ -10,12 +10,11 @@ Keep this module free of venue-specific or strategy-specific logic.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
-
 
 # ---------------------------------------------------------------------------
 # Primitive enums
@@ -224,7 +223,7 @@ class MarketEvent:
             market_id=market_id,
             asset_id=asset_id,
             venue=venue,
-            ts=ts or datetime.now(tz=timezone.utc),
+            ts=ts or datetime.now(tz=UTC),
             payload=payload,
         )
 

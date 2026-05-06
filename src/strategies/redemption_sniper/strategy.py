@@ -7,7 +7,7 @@ events to avoid sniping when an adverse print just happened.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
@@ -96,9 +96,9 @@ class RedemptionSniper:
         # Time filter
         now = event.ts
         if end.tzinfo is None:
-            end = end.replace(tzinfo=timezone.utc)
+            end = end.replace(tzinfo=UTC)
         if now.tzinfo is None:
-            now = now.replace(tzinfo=timezone.utc)
+            now = now.replace(tzinfo=UTC)
         if (end - now).total_seconds() > self.params.time_to_resolution_window_secs:
             return []
         if end <= now:

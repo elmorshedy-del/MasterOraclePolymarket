@@ -46,10 +46,21 @@ export default function StrategyLabPage() {
   );
 
   const [strategy, setStrategy] = useState<string>("");
+  const [configId, setConfigId] = useState<string>("default");
   const [days, setDays] = useState(30);
   const [overrideJson, setOverrideJson] = useState("{}");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Pull sleeve YAMLs so user can pick aggressive / conservative / etc.
+  const { data: sleevesResp } = useSWR<{ sleeves: { sleeve_id: string; strategy_name: string; config_id: string }[] }>(
+    "/api/backend/system/sleeves",
+    fetcher,
+  );
+  const matchingSleeves = (sleevesResp?.sleeves ?? []).filter((s) => s.strategy_name === strategy);
+  const availableConfigs = Array.from(
+    new Set(["default", ...matchingSleeves.map((s) => s.config_id)]),
+  );
 
   async function submit(extraOverrides: Record<string, unknown> = {}) {
     if (!strategy) return;
@@ -68,7 +79,7 @@ export default function StrategyLabPage() {
       const resp = await fetch("/api/backend/replay/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ strategy_name: strategy, config_id: "default", days, overrides }),
+        body: JSON.stringify({ strategy_name: strategy, config_id: configId, days, overrides }),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       await refetchJobs();
@@ -89,17 +100,30 @@ export default function StrategyLabPage() {
       </div>
 
       <section className="space-y-4 rounded-lg border border-border/60 bg-card p-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div>
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Strategy</label>
             <select
               value={strategy}
-              onChange={(e) => setStrategy(e.target.value)}
+              onChange={(e) => { setStrategy(e.target.value); setConfigId("default"); }}
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             >
               <option value="">— select —</option>
               {(strategiesResp?.strategies ?? []).map((s) => (
                 <option key={s.name} value={s.name}>{s.name} {s.edge_class ? `· ${s.edge_class}` : ""}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Config</label>
+            <select
+              value={configId}
+              onChange={(e) => setConfigId(e.target.value)}
+              disabled={!strategy}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm disabled:opacity-40"
+            >
+              {availableConfigs.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>

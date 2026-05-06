@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -19,7 +19,7 @@ def _snap(market_id: str, asset_id: str, bid: str, ask: str,
         venue="polymarket",
         market_id=market_id,
         asset_id=asset_id,
-        ts=ts or datetime.now(tz=timezone.utc),
+        ts=ts or datetime.now(tz=UTC),
         payload={"asks": [{"price": ask, "size": "100"}],
                  "bids": [{"price": bid, "size": "100"}]},
     )
@@ -29,7 +29,7 @@ def _snap(market_id: str, asset_id: str, bid: str, ask: str,
 async def test_fades_after_spike_on_paired_asset():
     strat = MeanRevertPostSpike(spike_threshold_pct=Decimal("0.10"))
     state: dict = {}
-    base = datetime(2026, 4, 30, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 30, 12, tzinfo=UTC)
 
     # Initialize both assets — A at 0.50, B at 0.50
     await strat.on_event(_snap("m1", "a", "0.49", "0.51", ts=base), state)
@@ -49,7 +49,7 @@ async def test_fades_after_spike_on_paired_asset():
 async def test_below_threshold_does_not_fire():
     strat = MeanRevertPostSpike(spike_threshold_pct=Decimal("0.10"))
     state: dict = {}
-    base = datetime(2026, 4, 30, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 30, 12, tzinfo=UTC)
 
     await strat.on_event(_snap("m1", "a", "0.49", "0.51", ts=base), state)
     await strat.on_event(_snap("m1", "b", "0.49", "0.51", ts=base), state)
@@ -65,7 +65,7 @@ async def test_below_threshold_does_not_fire():
 async def test_no_paired_asset_does_not_fire():
     strat = MeanRevertPostSpike()
     state: dict = {}
-    base = datetime(2026, 4, 30, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 30, 12, tzinfo=UTC)
 
     # Only one asset observed
     await strat.on_event(_snap("m1", "a", "0.49", "0.51", ts=base), state)
@@ -82,7 +82,7 @@ async def test_paired_asset_outside_band_does_not_fire():
         max_tradeable_price=Decimal("0.80"),
     )
     state: dict = {}
-    base = datetime(2026, 4, 30, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 30, 12, tzinfo=UTC)
     await strat.on_event(_snap("m1", "a", "0.94", "0.95", ts=base), state)
     # Paired asset at 0.04 (below floor)
     await strat.on_event(_snap("m1", "b", "0.03", "0.04", ts=base), state)
@@ -97,7 +97,7 @@ async def test_cooldown_blocks_repeat_fade():
     strat = MeanRevertPostSpike(spike_threshold_pct=Decimal("0.10"),
                                   fade_cooldown_secs=300)
     state: dict = {}
-    base = datetime(2026, 4, 30, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 30, 12, tzinfo=UTC)
     await strat.on_event(_snap("m1", "a", "0.49", "0.51", ts=base), state)
     await strat.on_event(_snap("m1", "b", "0.49", "0.51", ts=base), state)
     await strat.on_event(_snap("m1", "b", "0.34", "0.36", ts=base + timedelta(seconds=60)), state)
@@ -116,7 +116,7 @@ async def test_size_inversely_proportional_to_paired_ask():
     strat = MeanRevertPostSpike(target_notional_usd=Decimal("50"),
                                   spike_threshold_pct=Decimal("0.10"))
     state: dict = {}
-    base = datetime(2026, 4, 30, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 30, 12, tzinfo=UTC)
     await strat.on_event(_snap("m1", "a", "0.49", "0.51", ts=base), state)
     await strat.on_event(_snap("m1", "b", "0.49", "0.51", ts=base), state)
     await strat.on_event(_snap("m1", "b", "0.24", "0.25", ts=base + timedelta(seconds=60)), state)

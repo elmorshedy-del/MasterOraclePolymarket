@@ -12,7 +12,7 @@ A naïve ``except (TypeError, ValueError)`` MISSES InvalidOperation.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -21,7 +21,6 @@ from src.core import plugin_loader
 from src.core.events import EventType, MarketEvent
 from src.strategies._lib import book_state
 from src.strategies._lib.parsing import safe_decimal
-
 
 # ---------------------------------------------------------------------------
 # safe_decimal: the helper itself
@@ -103,7 +102,7 @@ def test_book_state_apply_delta_with_garbage_does_not_crash():
 _MALFORMED_STREAM = [
     _ev(EventType.MARKET_META, {"asset_ids": ["a", "b"], "category": "weather",
                                   "tags_extra": {"volume_24h": 25000},
-                                  "end_time": (datetime(2026, 5, 5, 13, tzinfo=timezone.utc)).isoformat()}),
+                                  "end_time": (datetime(2026, 5, 5, 13, tzinfo=UTC)).isoformat()}),
     _ev(EventType.BOOK_SNAPSHOT, {"asks": [{"price": None, "size": None}], "bids": []}),
     _ev(EventType.BOOK_SNAPSHOT, {"asks": "not a list", "bids": None}),
     _ev(EventType.BOOK_SNAPSHOT, {}),

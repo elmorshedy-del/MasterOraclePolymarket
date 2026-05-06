@@ -14,12 +14,9 @@ Three families:
 from __future__ import annotations
 
 import asyncio
-import inspect
 import re
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 
@@ -149,7 +146,7 @@ def test_every_strategy_active_key_is_registered():
 
 def _synthetic_stream(n: int = 50, market_id: str = "stress_m"):
     """Generate a synthetic stream covering every event type strategies care about."""
-    base = datetime(2026, 5, 5, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 5, 5, 12, tzinfo=UTC)
     events: list[MarketEvent] = []
 
     # Two markets with two assets each — enough for arb / pair logic

@@ -14,7 +14,7 @@ counterparty heuristic from public activity feed).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -64,7 +64,7 @@ class TagService:
         """Apply all tags to ``trade`` and write back to paper_trades row."""
         try:
             context = await self._build_context(trade)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("failed to build tag context for trade %s", trade.trade_id)
             return
 
@@ -73,7 +73,7 @@ class TagService:
         for t in self.tags:
             try:
                 value = t.tag_trade(trade, context)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("tag %s raised on trade %s", t.name, trade.trade_id)
                 continue
             if value is None:
@@ -91,7 +91,7 @@ class TagService:
 
     async def backfill_recent(self, hours: int = 24, limit: int = 5000) -> int:
         """Re-tag trades closed in the last N hours. Returns count tagged."""
-        since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+        since = datetime.now(tz=UTC) - timedelta(hours=hours)
         try:
             pool = await get_pool()
         except RuntimeError:
@@ -152,13 +152,13 @@ class TagService:
                 if isinstance(tags_extra, str):
                     try:
                         tags_extra = orjson.loads(tags_extra)
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         tags_extra = {}
                 vol = tags_extra.get("volume_24h") if isinstance(tags_extra, dict) else None
                 if vol is not None:
                     try:
                         ctx["volume_24h_usd"] = Decimal(str(vol))
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         pass
 
             # Book at entry — from nearest BOOK_SNAPSHOT in the 60s before entry
@@ -179,7 +179,7 @@ class TagService:
                 if isinstance(payload, str):
                     try:
                         payload = orjson.loads(payload)
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         payload = {}
                 ctx["book_at_entry"] = _payload_to_book(trade.market_id, trade.asset_id, payload)
 
@@ -216,7 +216,7 @@ class TagService:
                 if isinstance(p, str):
                     try:
                         p = orjson.loads(p)
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         p = {}
                 if isinstance(p, dict):
                     ctx["counterparty_wallet"] = p.get("wallet")
@@ -288,7 +288,7 @@ def _payload_to_book(market_id: str, asset_id: str, payload: dict[str, Any]) -> 
             PriceLevel(price=Decimal(str(a["price"])), size=Decimal(str(a["size"])))
             for a in payload.get("asks", [])
         ]
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
     return OrderBook(market_id=market_id, asset_id=asset_id, bids=bids, asks=asks)
 

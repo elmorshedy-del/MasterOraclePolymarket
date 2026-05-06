@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -41,7 +41,6 @@ from src.core.events import (
 )
 from src.execution._resting import (
     DEFAULT_CANCEL_DECAY,
-    MAKER_FAST_THRESHOLD_SECS,
     RestingMaker,
 )
 
@@ -122,7 +121,7 @@ class EventReplayFillSimulator:
 
             # Book-driven walk-away check
             if resting.check_walk_away(book):
-                miss = resting.to_missed_fill(event.ts or datetime.now(tz=timezone.utc))
+                miss = resting.to_missed_fill(event.ts or datetime.now(tz=UTC))
                 fills.append(miss)
                 del self._resting[order_id]
                 self.missed_fills += 1

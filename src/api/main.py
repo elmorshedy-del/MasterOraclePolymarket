@@ -15,7 +15,7 @@ Phase 3 endpoints:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -28,7 +28,7 @@ from src.analytics.metric_service import MetricService
 from src.analytics.tag_service import _row_to_trade
 from src.db.connection import get_pool
 from src.runner.promotion_gates import PromotionEvaluator
-from src.runner.replay_engine import ReplayEngine, ReplayOverrides
+from src.runner.replay_engine import ReplayOverrides
 from src.runner.replay_queue import ReplayJob, get_queue
 from src.venues._orderbook_store import STORE
 
@@ -91,11 +91,11 @@ async def system_health() -> dict[str, object]:
             metrics["open_positions"] = await conn.fetchval(
                 "SELECT count(*) FROM paper_positions WHERE size > 0"
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         db_status = f"error: {exc!s}"
 
     return {
-        "checked_at": datetime.now(tz=timezone.utc).isoformat(),
+        "checked_at": datetime.now(tz=UTC).isoformat(),
         "db": {"status": db_status, "server_time": db_now, **metrics},
         "orderbooks": {
             "markets_in_memory": STORE.market_count(),
@@ -129,7 +129,7 @@ async def list_sleeves() -> dict[str, list[dict[str, Any]]]:
                 """
             )
             return {"sleeves": [dict(r) for r in rows]}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {"sleeves": []}
 
 
@@ -148,7 +148,7 @@ async def list_positions(sleeve_id: str | None = None) -> dict[str, list[dict[st
                     "SELECT * FROM paper_positions WHERE size > 0 ORDER BY opened_at DESC LIMIT 200"
                 )
             return {"positions": [dict(r) for r in rows]}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {"positions": []}
 
 
@@ -166,7 +166,7 @@ async def recent_fills(limit: int = Query(50, le=500)) -> dict[str, list[dict[st
                 limit,
             )
             return {"fills": [dict(r) for r in rows]}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {"fills": []}
 
 
@@ -205,7 +205,7 @@ async def recent_trades(
                 *params,
             )
             return {"trades": [dict(r) for r in rows]}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {"trades": []}
 
 
@@ -217,7 +217,7 @@ async def sleeve_pnl(
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
-            since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+            since = datetime.now(tz=UTC) - timedelta(hours=hours)
             if sleeve_id:
                 rows = await conn.fetch(
                     "SELECT * FROM sleeve_pnl_snapshots WHERE sleeve_id = $1 AND ts >= $2 ORDER BY ts ASC",
@@ -230,7 +230,7 @@ async def sleeve_pnl(
                     since,
                 )
             return {"points": [dict(r) for r in rows]}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {"points": []}
 
 
@@ -268,7 +268,7 @@ async def analytics_pivot(
     except RuntimeError:
         return {"row_dim": row, "col_dim": col, "metric": metric, "cells": []}
 
-    since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+    since = datetime.now(tz=UTC) - timedelta(hours=hours)
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             f"""
@@ -339,7 +339,7 @@ async def failure_modes(
     except RuntimeError:
         return {"buckets": []}
 
-    since = datetime.now(tz=timezone.utc) - timedelta(hours=hours)
+    since = datetime.now(tz=UTC) - timedelta(hours=hours)
     async with pool.acquire() as conn:
         params: list[Any] = [since]
         sleeve_clause = ""
@@ -376,6 +376,7 @@ async def failure_modes(
 async def list_strategies() -> dict[str, list[dict[str, Any]]]:
     """Strategies discovered by the plugin loader — for Strategy Lab dropdowns."""
     from pathlib import Path
+
     from src.core import plugin_loader
     plugins = plugin_loader.discover_all(Path(__file__).resolve().parents[2])
     return {
@@ -410,7 +411,7 @@ class ReplayRequest(BaseModel):
 @app.post("/replay/run")
 async def replay_run(req: ReplayRequest) -> dict[str, Any]:
     queue = get_queue()
-    range_end = req.range_end or datetime.now(tz=timezone.utc)
+    range_end = req.range_end or datetime.now(tz=UTC)
     range_start = req.range_start or (range_end - timedelta(days=req.days or 30))
 
     overrides = ReplayOverrides()
@@ -467,7 +468,7 @@ async def list_replay_runs(limit: int = Query(50, le=500)) -> dict[str, list[dic
                 limit,
             )
             return {"runs": [dict(r) for r in rows]}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {"runs": []}
 
 
@@ -525,7 +526,7 @@ async def markets_count() -> dict[str, int]:
         async with pool.acquire() as conn:
             row = await conn.fetchrow("SELECT count(*) AS c FROM markets")
             return {"count": int(row["c"]) if row else 0}
-    except Exception:  # noqa: BLE001
+    except Exception:
         return {"count": 0}
 
 

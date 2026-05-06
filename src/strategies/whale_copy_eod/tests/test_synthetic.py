@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -20,7 +20,7 @@ def _activity(market_id: str, asset_id: str, *, wallet: str, side: str,
         venue="polymarket",
         market_id=market_id,
         asset_id=asset_id,
-        ts=ts or datetime.now(tz=timezone.utc),
+        ts=ts or datetime.now(tz=UTC),
         payload={
             "wallet": wallet,
             "side": side,
@@ -109,7 +109,7 @@ async def test_size_scaled_by_copy_ratio_and_capped():
 async def test_cooldown_blocks_repeat():
     strat = WhaleCopyEod(tracked_wallets={"sharp1"}, wallet_market_cooldown_secs=300)
     state: dict = {}
-    base = datetime(2026, 4, 30, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 30, 12, tzinfo=UTC)
     await strat.on_event(_snap("m1", "a"), state)
     sigs1 = await strat.on_event(
         _activity("m1", "a", wallet="sharp1", side="BUY", ts=base), state)

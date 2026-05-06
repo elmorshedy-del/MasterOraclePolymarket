@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -26,9 +26,9 @@ from src.core.events import (
     Signal,
 )
 from src.core.interfaces import FillSimulator, MarketDataSource
+from src.db import writers as db_writers
 from src.db.connection import close_pool, get_pool
 from src.db.event_writer import EventWriter
-from src.db import writers as db_writers
 from src.execution.calibrated import CalibratedFillSimulator
 from src.execution.event_replay import EventReplayFillSimulator
 from src.execution.pnl_snapshotter import PnLSnapshotter
@@ -90,7 +90,7 @@ class Runner:
         for v in self.venues:
             try:
                 await v.stop()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("venue %s stop failed", v.name)
 
         for t in self._tasks:
@@ -98,7 +98,7 @@ class Runner:
         for t in self._tasks:
             try:
                 await t
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            except (asyncio.CancelledError, Exception):
                 pass
 
         await self.aggregator.stop()
@@ -214,7 +214,7 @@ class Runner:
                         enabled=loaded_sleeve.sleeve.enabled,
                         config_hash=loaded_sleeve.config_hash,
                     )
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.exception("failed to upsert sleeve %s", loaded_sleeve.sleeve.sleeve_id)
 
         logger.info("strategy runners: %d active", len(self.strategy_runners))
@@ -246,10 +246,10 @@ class Runner:
         if markets_venue and clob_venue:
             await markets_venue.start()
             try:
-                items = await asyncio.wait_for(markets_venue._fetch_markets(), timeout=30.0)  # noqa: SLF001
+                items = await asyncio.wait_for(markets_venue._fetch_markets(), timeout=30.0)
                 for m in items:
-                    markets_venue._known_meta[m.market_id] = m  # noqa: SLF001
-            except Exception:  # noqa: BLE001
+                    markets_venue._known_meta[m.market_id] = m
+            except Exception:
                 logger.exception("[polymarket_markets] initial fetch failed")
             asset_ids = markets_venue.asset_ids()  # type: ignore[attr-defined]
             top_n = self.system_cfg.markets.top_n_by_volume
@@ -270,7 +270,7 @@ class Runner:
             await self.fill_validator.start()
             if self.pnl_snapshotter is not None:
                 await self.pnl_snapshotter.start()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("failed to start periodic jobs")
 
     def _spawn_consumers(self) -> None:
@@ -287,7 +287,7 @@ class Runner:
                 await self._on_event(event)
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("consumer for venue %s crashed", venue.name)
 
     async def _on_event(self, event: MarketEvent) -> None:
@@ -338,7 +338,7 @@ class Runner:
             if self._db_available:
                 try:
                     await db_writers.insert_trade(trade, "resolution", source="resolution")
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.exception("failed to persist resolution trade %s", trade.trade_id)
 
         # Clear strategy active sets so future markets can be traded
@@ -361,7 +361,7 @@ class Runner:
             return
         try:
             fills = await self.fill_simulator.on_event(event, book)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("fill_simulator.on_event raised for event %s", event.event_id)
             return
         for fill in fills:
@@ -371,7 +371,7 @@ class Runner:
         if self._db_available:
             try:
                 await db_writers.insert_signal(signal)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("failed to persist signal %s", signal.signal_id)
 
         if runner.mode == RuntimeMode.LIVE_LOG:
@@ -396,7 +396,7 @@ class Runner:
         assert self.system_cfg is not None
         await apply_latency(self.system_cfg.runtime.latency)
 
-        ts_placed = datetime.now(tz=timezone.utc)
+        ts_placed = datetime.now(tz=UTC)
         order = Order(
             order_id=uuid4(),
             signal_id=signal.signal_id,
@@ -415,14 +415,14 @@ class Runner:
         if self._db_available:
             try:
                 await db_writers.insert_order(order)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("failed to persist order %s", order.order_id)
 
         book = STORE.get(signal.market_id, signal.asset_id) or book
 
         try:
             fills = await self.fill_simulator.submit(order, book)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("fill_simulator.submit raised for order %s", order.order_id)
             return
 
@@ -439,7 +439,7 @@ class Runner:
         if self._db_available:
             try:
                 await db_writers.insert_fill(fill)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("failed to persist fill %s", fill.fill_id)
 
         if runner is not None and runner.mode == RuntimeMode.LIVE_SIGNAL:
@@ -475,14 +475,14 @@ class Runner:
         if self._db_available:
             try:
                 await db_writers.insert_trade(trade, runner.sleeve.config_hash)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("failed to persist trade %s", trade.trade_id)
 
             # Apply tags + persist to denormalized columns + tags_extra
             if self.tag_service is not None:
                 try:
                     await self.tag_service.tag_and_persist(trade)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.exception("tag_and_persist failed for trade %s", trade.trade_id)
 
     def _runner_for_sleeve(self, sleeve_id: str) -> StrategyRunner | None:
@@ -516,7 +516,7 @@ class Runner:
         # Per-market exposure cap (USD)
         try:
             cap = _D(str(sleeve.max_exposure_per_market_usd or 0))
-        except Exception:  # noqa: BLE001
+        except Exception:
             cap = _D(0)
         if cap > 0:
             existing_exposure = sum(
@@ -571,7 +571,7 @@ class Runner:
                         avg_entry=0,
                         opened_at=fill.ts_filled,
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("paper_positions sync failed for %s", fill.sleeve_id)
 
 

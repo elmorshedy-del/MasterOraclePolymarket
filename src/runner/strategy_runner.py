@@ -56,7 +56,7 @@ class StrategyRunner:
 
         try:
             signals = await self.strategy.on_event(event, self.state)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception(
                 "strategy %s/%s raised on event %s",
                 self.strategy.name,

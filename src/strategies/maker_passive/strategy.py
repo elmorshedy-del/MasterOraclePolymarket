@@ -86,7 +86,7 @@ class MakerPassive:
         meta = market_meta_cache.get(state, market_id) or {}
         try:
             tick = Decimal(str(meta.get("tick_size") or self.params.tick_size))
-        except Exception:  # noqa: BLE001
+        except Exception:
             tick = self.params.tick_size
 
         if (ask - bid) < tick * self.params.min_spread_ticks:

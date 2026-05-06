@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # Active-state keys used by shipped strategies.
 # Each entry is the dict key inside ``state`` plus a short tag describing
 # how the value is shaped. The clearer handles all common shapes.
@@ -44,9 +43,7 @@ def clear_for_market(state: dict[str, Any], market_id: str) -> int:
 
         to_remove: list[Any] = []
         for entry in bag:
-            if entry == market_id:
-                to_remove.append(entry)
-            elif isinstance(entry, tuple) and market_id in entry:
+            if entry == market_id or (isinstance(entry, tuple) and market_id in entry):
                 to_remove.append(entry)
 
         for entry in to_remove:

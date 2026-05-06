@@ -17,13 +17,12 @@ import itertools
 import logging
 import os
 from collections.abc import AsyncIterator, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import orjson
 
 from src.core.events import EventType, MarketEvent, MarketMeta
-from src.core.interfaces import MarketDataSource
 from src.venues._ws_helper import ReconnectingWS, safe_send
 
 logger = logging.getLogger(__name__)
@@ -97,9 +96,9 @@ class Deribit:
 
             ts_ms = data.get("timestamp")
             ts = (
-                datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
+                datetime.fromtimestamp(ts_ms / 1000.0, tz=UTC)
                 if isinstance(ts_ms, (int, float))
-                else datetime.now(tz=timezone.utc)
+                else datetime.now(tz=UTC)
             )
 
             payload = {
@@ -134,7 +133,7 @@ def _to_str(v) -> str | None:
         return None
     try:
         return str(Decimal(str(v)))
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 

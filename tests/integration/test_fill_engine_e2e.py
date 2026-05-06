@@ -7,8 +7,7 @@ resulting Trade rows.
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -34,7 +33,7 @@ def _book(bids, asks) -> OrderBook:
         asset_id="a",
         bids=[PriceLevel(price=Decimal(p), size=Decimal(s)) for p, s in bids],
         asks=[PriceLevel(price=Decimal(p), size=Decimal(s)) for p, s in asks],
-        last_update_ts=datetime.now(tz=timezone.utc),
+        last_update_ts=datetime.now(tz=UTC),
     )
 
 
@@ -147,8 +146,8 @@ async def test_thin_market_flagged():
         order_type=OrderType.MARKET,
         price=None,
         size=Decimal("10"),
-        ts_signal=datetime.now(tz=timezone.utc),
-        ts_placed=datetime.now(tz=timezone.utc),
+        ts_signal=datetime.now(tz=UTC),
+        ts_placed=datetime.now(tz=UTC),
     )
     fills = await sim.submit(order, book)
     assert len(fills) == 1
@@ -173,8 +172,8 @@ async def test_size_exceeds_depth_flagged():
         order_type=OrderType.LIMIT,
         price=Decimal("0.51"),
         size=Decimal("50"),       # 5x the depth
-        ts_signal=datetime.now(tz=timezone.utc),
-        ts_placed=datetime.now(tz=timezone.utc),
+        ts_signal=datetime.now(tz=UTC),
+        ts_placed=datetime.now(tz=UTC),
     )
     fills = await sim.submit(order, book)
     # The pre-flight check operates on depth_at_or_better at our price; for a
@@ -203,15 +202,15 @@ async def test_maker_fill_via_trade_event():
         order_type=OrderType.LIMIT,
         price=Decimal("0.49"),
         size=Decimal("20"),
-        ts_signal=datetime.now(tz=timezone.utc),
-        ts_placed=datetime.now(tz=timezone.utc),
+        ts_signal=datetime.now(tz=UTC),
+        ts_placed=datetime.now(tz=UTC),
     )
     fills = await sim.submit(order, book)
     assert fills == []
     assert sim.open_resting_count() == 1
 
     # First trade at 0.49 size 50 — eats 50 of 100 queue ahead
-    ts = datetime.now(tz=timezone.utc)
+    ts = datetime.now(tz=UTC)
     trade1 = MarketEvent.make(
         event_type=EventType.TRADE_PRINT,
         venue="polymarket",

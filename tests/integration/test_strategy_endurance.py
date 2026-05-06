@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -35,7 +35,7 @@ def _generate_timeline(
 ):
     """Build a realistic-ish multi-day event timeline for n binary markets."""
     rng = random.Random(seed)
-    base = datetime(2026, 5, 5, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 5, 5, 12, tzinfo=UTC)
     events: list[MarketEvent] = []
     market_winners: dict[str, str] = {}
 

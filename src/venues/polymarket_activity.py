@@ -18,12 +18,11 @@ import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
 from src.core.events import EventType, MarketEvent, MarketMeta
-from src.core.interfaces import MarketDataSource
 
 logger = logging.getLogger(__name__)
 
@@ -81,20 +80,20 @@ class PolymarketActivity:
         while not self._stop.is_set():
             try:
                 items = await self._fetch_recent()
-                self.last_poll_at = datetime.now(tz=timezone.utc)
+                self.last_poll_at = datetime.now(tz=UTC)
                 for raw in items:
                     event = self._normalize(raw)
                     if event is None:
                         continue
                     yield event
                     self.events_emitted += 1
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self.last_error = repr(exc)
                 logger.warning("[polymarket_activity] poll failed: %s", exc)
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.poll_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def list_markets(self) -> Iterable[MarketMeta]:
@@ -171,7 +170,7 @@ class PolymarketActivity:
 
 def _parse_ts(raw) -> datetime:
     if raw is None:
-        return datetime.now(tz=timezone.utc)
+        return datetime.now(tz=UTC)
     try:
         # Try ISO-8601
         if isinstance(raw, str) and "T" in raw:
@@ -180,10 +179,10 @@ def _parse_ts(raw) -> datetime:
         v = float(raw)
         # Heuristic: treat values bigger than 10^12 as ms
         if v > 1e12:
-            return datetime.fromtimestamp(v / 1000.0, tz=timezone.utc)
-        return datetime.fromtimestamp(v, tz=timezone.utc)
+            return datetime.fromtimestamp(v / 1000.0, tz=UTC)
+        return datetime.fromtimestamp(v, tz=UTC)
     except (TypeError, ValueError):
-        return datetime.now(tz=timezone.utc)
+        return datetime.now(tz=UTC)
 
 
 def plugin() -> PolymarketActivity:

@@ -6,7 +6,6 @@ import math
 
 from src.core.events import Trade
 
-
 _ANNUALIZATION = math.sqrt(2520)
 
 

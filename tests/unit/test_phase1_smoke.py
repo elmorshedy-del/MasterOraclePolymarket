@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 
@@ -11,7 +11,7 @@ def test_orderbook_store_snapshot_and_delta():
     from src.venues._orderbook_store import OrderBookStore
 
     store = OrderBookStore()
-    ts = datetime.now(tz=timezone.utc)
+    ts = datetime.now(tz=UTC)
 
     store.apply_snapshot(
         market_id="m1",
@@ -92,7 +92,7 @@ def test_news_rss_canonical_url_dedupe_setup():
     n = NewsRSS()
     assert n.name == "news_rss"
     assert n.events_emitted == 0
-    assert len(n._seen_urls) == 0  # noqa: SLF001
+    assert len(n._seen_urls) == 0
     assert len(n.feeds) >= 1
 
 
@@ -139,4 +139,4 @@ def test_event_writer_buffer_and_dedupe():
         w.submit(ev)
     # 7 submitted, max_buffer 5 → 2 dropped
     assert w.events_dropped == 2
-    assert len(w._buffer) == 5  # noqa: SLF001
+    assert len(w._buffer) == 5

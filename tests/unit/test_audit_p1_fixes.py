@@ -6,7 +6,7 @@ when a DB is wired in; the SQL is reviewed in code.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -27,7 +27,7 @@ def _book(bids, asks):
         market_id="m", asset_id="a",
         bids=[PriceLevel(price=Decimal(p), size=Decimal(s)) for p, s in bids],
         asks=[PriceLevel(price=Decimal(p), size=Decimal(s)) for p, s in asks],
-        last_update_ts=datetime.now(tz=timezone.utc),
+        last_update_ts=datetime.now(tz=UTC),
     )
 
 
@@ -66,8 +66,8 @@ async def test_preflight_flags_buy_taker_eating_thin_asks():
         market_id="m", asset_id="a",
         side=Side.BUY, order_type=OrderType.LIMIT,
         price=Decimal("0.50"), size=Decimal("9"),     # 90% of ask depth
-        ts_signal=datetime.now(tz=timezone.utc),
-        ts_placed=datetime.now(tz=timezone.utc),
+        ts_signal=datetime.now(tz=UTC),
+        ts_placed=datetime.now(tz=UTC),
     )
     fills = await sim.submit(order, book)
     assert len(fills) == 1
@@ -87,8 +87,8 @@ async def test_preflight_does_not_flag_when_well_within_ask_depth():
         market_id="m", asset_id="a",
         side=Side.BUY, order_type=OrderType.LIMIT,
         price=Decimal("0.50"), size=Decimal("100"),    # 1% of ask depth
-        ts_signal=datetime.now(tz=timezone.utc),
-        ts_placed=datetime.now(tz=timezone.utc),
+        ts_signal=datetime.now(tz=UTC),
+        ts_placed=datetime.now(tz=UTC),
     )
     fills = await sim.submit(order, book)
     assert sim.would_have_moved_market == 0
@@ -107,8 +107,8 @@ async def test_preflight_flags_market_order_eating_book():
         market_id="m", asset_id="a",
         side=Side.BUY, order_type=OrderType.MARKET,
         price=None, size=Decimal("15"),
-        ts_signal=datetime.now(tz=timezone.utc),
-        ts_placed=datetime.now(tz=timezone.utc),
+        ts_signal=datetime.now(tz=UTC),
+        ts_placed=datetime.now(tz=UTC),
     )
     await sim.submit(order, book)
     assert sim.would_have_moved_market == 1

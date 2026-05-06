@@ -18,7 +18,7 @@ class LiquidityBucketTag:
             return "unknown"
         try:
             v = Decimal(str(vol))
-        except Exception:  # noqa: BLE001
+        except Exception:
             return "unknown"
         if v < Decimal("1000"):
             return "thin"

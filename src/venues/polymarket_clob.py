@@ -31,13 +31,12 @@ import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import orjson
 
 from src.core.events import EventType, MarketEvent, MarketMeta, Side
-from src.core.interfaces import MarketDataSource
 from src.venues._orderbook_store import STORE
 from src.venues._ws_helper import ReconnectingWS, safe_send
 
@@ -242,12 +241,12 @@ def _normalize(msg: dict) -> MarketEvent | None:
 def _parse_ts(raw) -> datetime:
     """Polymarket timestamps come as ms-since-epoch strings or ints."""
     if raw is None:
-        return datetime.now(tz=timezone.utc)
+        return datetime.now(tz=UTC)
     try:
         ms = int(raw)
-        return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc)
+        return datetime.fromtimestamp(ms / 1000.0, tz=UTC)
     except (TypeError, ValueError):
-        return datetime.now(tz=timezone.utc)
+        return datetime.now(tz=UTC)
 
 
 def _chunks(seq: list[str], n: int) -> Iterable[list[str]]:

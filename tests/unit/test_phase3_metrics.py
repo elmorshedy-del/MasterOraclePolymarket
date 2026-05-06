@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+from src.analytics.metric_service import MetricService
 from src.analytics.metrics.avg_trade import AvgTradeMetric
 from src.analytics.metrics.capacity_estimate import CapacityEstimateMetric
 from src.analytics.metrics.max_drawdown import MaxDrawdownMetric
@@ -15,12 +16,11 @@ from src.analytics.metrics.sortino import SortinoMetric
 from src.analytics.metrics.total_pnl import TotalPnLMetric
 from src.analytics.metrics.trade_count import TradeCountMetric
 from src.analytics.metrics.win_rate import WinRateMetric
-from src.analytics.metric_service import MetricService
 from src.core.events import FillType, RealismFlag, Side, Trade
 
 
 def _trade(pnl_after: float, pnl_raw: float | None = None, days_offset: float = 0.0) -> Trade:
-    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    base = datetime(2026, 1, 1, tzinfo=UTC)
     return Trade(
         trade_id=uuid4(),
         sleeve_id="s",

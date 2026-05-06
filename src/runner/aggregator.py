@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.db.connection import get_pool
 
@@ -126,19 +126,19 @@ class Aggregator:
                 if self.runs_completed % 10 == 0:
                     await self._run_daily_aggregation()
                 self.runs_completed += 1
-                self.last_run_ts = datetime.now(tz=timezone.utc)
-            except Exception as exc:  # noqa: BLE001
+                self.last_run_ts = datetime.now(tz=UTC)
+            except Exception as exc:
                 self.last_error = repr(exc)
                 logger.exception("aggregator run failed: %s", exc)
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.run_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def _run_minute_aggregation(self) -> None:
         # Aggregate the most recent fully-closed minute
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         end = now.replace(second=0, microsecond=0)
         start = end - timedelta(minutes=2)
 
@@ -147,7 +147,7 @@ class Aggregator:
             await conn.execute(_AGG_SQL, start, end)
 
     async def _run_daily_aggregation(self) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         # Aggregate yesterday + today's partial day
         start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         end = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)

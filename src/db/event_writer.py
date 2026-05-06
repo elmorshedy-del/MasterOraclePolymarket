@@ -15,7 +15,6 @@ import logging
 import time
 from collections import deque
 from contextlib import suppress
-from typing import Optional
 
 import orjson
 
@@ -37,7 +36,7 @@ class EventWriter:
         self.max_buffer = max_buffer
 
         self._buffer: deque[MarketEvent] = deque()
-        self._task: Optional[asyncio.Task[None]] = None
+        self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
 
         # Telemetry
@@ -77,7 +76,7 @@ class EventWriter:
         while not self._stop.is_set():
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.flush_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             await self._flush_once()
 
@@ -117,7 +116,7 @@ class EventWriter:
             self.events_written += len(batch)
             self.last_flush_count = len(batch)
             self.last_flush_ts = time.time()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("event flush failed; %d events lost from this batch", len(batch))
 
 

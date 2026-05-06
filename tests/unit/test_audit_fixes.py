@@ -13,7 +13,7 @@ import pytest
 
 from src.core import config as cfg
 from src.core import plugin_loader
-from src.core.events import EventType, MarketEvent, RuntimeMode
+from src.core.events import RuntimeMode
 from src.runner.main import _instantiate_with_params
 from src.runner.strategy_runner import StrategyRunner
 

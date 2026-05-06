@@ -7,7 +7,6 @@ from typing import Any
 
 from src.core.events import Trade
 
-
 BUCKETS = (
     (Decimal("0.05"), "<$0.05"),
     (Decimal("0.25"), "$0.05-0.25"),

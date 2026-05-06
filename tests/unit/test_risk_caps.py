@@ -6,7 +6,7 @@ breach a sleeve's max_concurrent_positions or max_exposure_per_market_usd.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -64,7 +64,7 @@ def _signal(market: str = "m1", price: str = "0.50",
         price=Decimal(price),
         size=Decimal(size),
         reason="test",
-        ts_signal=datetime.now(tz=timezone.utc),
+        ts_signal=datetime.now(tz=UTC),
     )
 
 
@@ -80,7 +80,7 @@ def _fill(market: str = "m1", asset: str = "a", price: str = "0.50",
         price=Decimal(price),
         size=Decimal(size),
         fill_type=FillType.TAKER,
-        ts_filled=datetime.now(tz=timezone.utc),
+        ts_filled=datetime.now(tz=UTC),
         realism_flag=RealismFlag.CLEAN,
         gas_cost=Decimal("0.10"),
     )
@@ -161,6 +161,6 @@ def test_market_order_skips_exposure_calc():
         market_id="m1", asset_id="a",
         side=Side.BUY, order_type=OrderType.MARKET,
         price=None, size=Decimal("1000"),
-        reason="big market order", ts_signal=datetime.now(tz=timezone.utc),
+        reason="big market order", ts_signal=datetime.now(tz=UTC),
     )
     assert runner._signal_within_risk_caps(s, sr) is True

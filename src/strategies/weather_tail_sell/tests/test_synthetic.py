@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -28,7 +28,7 @@ def _snap(market_id: str, asset_id: str, ask: str, ts: datetime | None = None) -
         venue="polymarket",
         market_id=market_id,
         asset_id=asset_id,
-        ts=ts or datetime.now(tz=timezone.utc),
+        ts=ts or datetime.now(tz=UTC),
         payload={"asks": [{"price": ask, "size": "100"}],
                  "bids": [{"price": "0.30", "size": "100"}]},
     )
@@ -78,7 +78,7 @@ async def test_below_band_does_not_fire():
 async def test_adverse_print_blocks_fire():
     strat = WeatherTailSell()
     state: dict = {}
-    now = datetime(2026, 4, 29, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 29, 12, tzinfo=UTC)
     await strat.on_event(_meta("m1", "tail", "weather"), state)
     await strat.on_event(_trade("m1", "tail", "0.92", ts=now - timedelta(seconds=60)), state)
     sigs = await strat.on_event(_snap("m1", "tail", "0.96", ts=now), state)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -35,7 +35,7 @@ def _snap(market_id: str, asset_id: str, bid: str, ask: str,
         venue="polymarket",
         market_id=market_id,
         asset_id=asset_id,
-        ts=ts or datetime.now(tz=timezone.utc),
+        ts=ts or datetime.now(tz=UTC),
         payload={
             "asks": [{"price": ask, "size": "100"}],
             "bids": [{"price": bid, "size": "100"}],
@@ -79,7 +79,7 @@ async def test_narrow_spread_does_not_fire():
 async def test_cooldown_blocks_re_emission():
     strat = MakerPassive(min_24h_volume_usd=1000, place_interval_secs=60)
     state: dict = {}
-    base = datetime(2026, 4, 29, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 29, 12, tzinfo=UTC)
     await strat.on_event(_meta("m1", "a", vol_24h=10000), state)
     sigs1 = await strat.on_event(_snap("m1", "a", "0.48", "0.52", ts=base), state)
     assert len(sigs1) == 2

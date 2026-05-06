@@ -14,13 +14,12 @@ import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import httpx
 
 from src.core.events import EventType, MarketEvent, MarketMeta
-from src.core.interfaces import MarketDataSource
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +73,7 @@ class PolymarketMarkets:
         while not self._stop.is_set():
             try:
                 markets = await self._fetch_markets()
-                self.last_poll_at = datetime.now(tz=timezone.utc)
+                self.last_poll_at = datetime.now(tz=UTC)
                 for meta in markets:
                     is_new = meta.market_id not in self._known_meta
                     self._known_meta[meta.market_id] = meta
@@ -96,7 +95,7 @@ class PolymarketMarkets:
                             asset_ids=list(meta.asset_ids),
                             tags_extra=dict(meta.tags_extra),
                         )
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         logger.debug("[polymarket_markets] markets-table upsert skipped: %s", exc)
 
                     # Emit MARKET_META on first observation so strategies can
@@ -117,7 +116,7 @@ class PolymarketMarkets:
                                 },
                                 market_id=meta.market_id,
                                 asset_id=asset_id,
-                                ts=datetime.now(tz=timezone.utc),
+                                ts=datetime.now(tz=UTC),
                             )
 
                     # Resolution detection — fire MARKET_RESOLVED once
@@ -133,19 +132,19 @@ class PolymarketMarkets:
                                 "resolution": meta.tags_extra.get("resolution"),
                             },
                             market_id=meta.market_id,
-                            ts=datetime.now(tz=timezone.utc),
+                            ts=datetime.now(tz=UTC),
                         )
                     self._last_resolution_state[meta.market_id] = is_resolved
 
                 self.markets_known = len(self._known_meta)
                 logger.info("[polymarket_markets] tracking %d markets", self.markets_known)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self.last_error = repr(exc)
                 logger.warning("[polymarket_markets] poll failed: %s", exc)
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=self.poll_interval_secs)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def list_markets(self) -> Iterable[MarketMeta]:
@@ -219,7 +218,7 @@ def _parse_market(raw: dict) -> MarketMeta | None:
         tick_size_raw = raw.get("minimum_tick_size") or raw.get("tickSize") or "0.01"
         try:
             tick_size = Decimal(str(tick_size_raw))
-        except Exception:  # noqa: BLE001
+        except Exception:
             tick_size = Decimal("0.01")
 
         category = raw.get("category") or raw.get("topCategory") or "uncategorized"
@@ -242,7 +241,7 @@ def _parse_market(raw: dict) -> MarketMeta | None:
                 "liquidity": raw.get("liquidity"),
             },
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("failed to parse market: %s", raw.get("id") if isinstance(raw, dict) else "?")
         return None
 

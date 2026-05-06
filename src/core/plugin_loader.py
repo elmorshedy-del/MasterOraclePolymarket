@@ -75,7 +75,7 @@ def _discover_kind(
     for module_path in files:
         try:
             instance = _load_module_plugin(module_path)
-        except Exception as exc:  # noqa: BLE001 — surface but never crash boot
+        except Exception as exc:
             logger.exception("failed to load %s plugin %s: %s", kind, module_path, exc)
             continue
 

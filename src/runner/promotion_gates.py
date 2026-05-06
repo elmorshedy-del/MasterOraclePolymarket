@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -204,14 +204,14 @@ class PromotionEvaluator:
             try:
                 import orjson
                 summary = orjson.loads(summary)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 summary = {}
 
         signals = int(summary.get("signals", 0) or 0)
         realized_str = summary.get("realized_pnl", "0")
         try:
             realized = Decimal(str(realized_str))
-        except Exception:  # noqa: BLE001
+        except Exception:
             realized = Decimal(0)
 
         # Max drawdown — pull from per-trade ledger for the sleeve(s) that own the run
@@ -419,7 +419,7 @@ class PromotionEvaluator:
             )
         if ts is None:
             return 0
-        return max(0, (datetime.now(tz=timezone.utc) - ts).days)
+        return max(0, (datetime.now(tz=UTC) - ts).days)
 
     async def _latest_replay_signals(self, conn, sleeve) -> int:
         row = await conn.fetchrow(
@@ -438,6 +438,6 @@ class PromotionEvaluator:
             try:
                 import orjson
                 summary = orjson.loads(summary)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 summary = {}
         return int(summary.get("signals", 0) or 0)

@@ -9,7 +9,6 @@ live_log. They must pass before any sleeve config sets ``mode: live_log``.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -17,7 +16,6 @@ import pytest
 
 from src.core.events import EventType, MarketEvent, Side
 from src.strategies.cross_outcome_arb.strategy import CrossOutcomeArb
-
 
 # ---------------------------------------------------------------------------
 # Helpers

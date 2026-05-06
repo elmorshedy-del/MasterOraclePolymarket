@@ -71,7 +71,7 @@ class ReconnectingWS:
         if ws is not None:
             try:
                 await ws.close(code=1000, reason="resubscribe")
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
     async def stream(self) -> AsyncIterator[str]:
@@ -105,13 +105,13 @@ class ReconnectingWS:
                             break
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self.last_error = repr(exc)
                 logger.warning("[%s] ws error: %s — reconnecting in %.1fs", self.name, exc, backoff)
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=backoff)
                     break  # stop requested during backoff
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     backoff = min(backoff * 2, self.backoff_max)
             else:
                 # Clean close (no exception) — reconnect quickly unless stopping

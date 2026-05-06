@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -19,7 +19,7 @@ def _snap(market_id: str, asset_id: str, bids: list[tuple[str, str]],
         venue="polymarket",
         market_id=market_id,
         asset_id=asset_id,
-        ts=ts or datetime.now(tz=timezone.utc),
+        ts=ts or datetime.now(tz=UTC),
         payload={
             "asks": [{"price": p, "size": s} for p, s in asks],
             "bids": [{"price": p, "size": s} for p, s in bids],
@@ -98,7 +98,7 @@ async def test_bearish_without_paired_asset_does_not_fire():
 async def test_cooldown_blocks_repeat():
     strat = MomentumOrderbook(cooldown_secs=300)
     state: dict = {}
-    base = datetime(2026, 4, 30, 12, tzinfo=timezone.utc)
+    base = datetime(2026, 4, 30, 12, tzinfo=UTC)
     sigs1 = await strat.on_event(
         _snap("m1", "a", bids=[("0.49", "800")], asks=[("0.51", "200")], ts=base), state)
     assert len(sigs1) == 1

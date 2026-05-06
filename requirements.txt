@@ -1,0 +1,24 @@
+# Fallback for Nixpacks / pip-only builders that don't read pyproject.toml.
+# Keep in sync with pyproject.toml [project.dependencies].
+
+asyncio-mqtt>=0.16.2
+websockets>=12.0
+httpx>=0.27.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+sqlalchemy>=2.0.27
+asyncpg>=0.29.0
+alembic>=1.13.1
+pyyaml>=6.0.1
+watchfiles>=0.21.0
+structlog>=24.1.0
+orjson>=3.9.15
+tenacity>=8.2.3
+python-dateutil>=2.9.0
+feedparser>=6.0.11
+praw>=7.7.1
+numpy>=1.26.4
+pandas>=2.2.1
+scipy>=1.12.0

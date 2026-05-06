@@ -12,12 +12,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import orjson
 
 from src.core.events import EventType, MarketEvent, MarketMeta
-from src.core.interfaces import MarketDataSource
 from src.venues._ws_helper import ReconnectingWS
 
 logger = logging.getLogger(__name__)
@@ -73,9 +72,9 @@ class BinancePerp:
 
             ts_ms = data.get("E") or data.get("T")
             ts = (
-                datetime.fromtimestamp(ts_ms / 1000.0, tz=timezone.utc)
+                datetime.fromtimestamp(ts_ms / 1000.0, tz=UTC)
                 if isinstance(ts_ms, (int, float))
-                else datetime.now(tz=timezone.utc)
+                else datetime.now(tz=UTC)
             )
 
             payload = {

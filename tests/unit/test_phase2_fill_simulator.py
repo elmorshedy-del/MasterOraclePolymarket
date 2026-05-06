@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
 import pytest
 
 from src.core.events import (
-    EventType,
-    MarketEvent,
     Order,
     OrderBook,
     OrderType,
@@ -25,12 +23,12 @@ def _book(bids, asks):
         market_id="m", asset_id="a",
         bids=[PriceLevel(price=Decimal(p), size=Decimal(s)) for p, s in bids],
         asks=[PriceLevel(price=Decimal(p), size=Decimal(s)) for p, s in asks],
-        last_update_ts=datetime.now(tz=timezone.utc),
+        last_update_ts=datetime.now(tz=UTC),
     )
 
 
 def _order(side, otype, price, size):
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     return Order(
         order_id=uuid4(),
         signal_id=uuid4(),

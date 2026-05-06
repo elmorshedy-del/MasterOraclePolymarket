@@ -18,10 +18,9 @@ import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.core.events import EventType, MarketEvent, MarketMeta
-from src.core.interfaces import MarketDataSource
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +96,7 @@ class Reddit:
         try:
             for post in await asyncio.to_thread(_fetch_new, 100):
                 seen.add(post.id)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("[reddit] seed failed")
 
         for _ in cycle([0]):
@@ -105,7 +104,7 @@ class Reddit:
                 break
             try:
                 posts = await asyncio.to_thread(_fetch_new, 25)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("[reddit] fetch failed: %s", exc)
                 posts = []
 
@@ -116,7 +115,7 @@ class Reddit:
                 if len(seen) > seen_max:
                     seen = set(list(seen)[seen_max // 2 :])
 
-                ts = datetime.fromtimestamp(post.created_utc, tz=timezone.utc)
+                ts = datetime.fromtimestamp(post.created_utc, tz=UTC)
                 self.events_emitted += 1
                 self.last_event_at = ts
                 yield MarketEvent.make(
@@ -135,7 +134,7 @@ class Reddit:
 
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=30.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def list_markets(self) -> Iterable[MarketMeta]:

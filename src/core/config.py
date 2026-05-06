@@ -20,7 +20,7 @@ import hashlib
 import logging
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -144,7 +144,7 @@ class LoadedSystemConfig:
     pipes: PipesConfig
     markets: MarketsConfig
     config_hash: str
-    loaded_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    loaded_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
 
 
 @dataclass
@@ -152,7 +152,7 @@ class LoadedSleeveConfig:
     sleeve: SleeveConfig
     config_hash: str
     source_path: Path
-    loaded_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    loaded_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
 
 
 def _hash_yaml(text: str) -> str:
@@ -190,7 +190,7 @@ def load_sleeves(sleeves_dir: Path) -> list[LoadedSleeveConfig]:
         try:
             data = yaml.safe_load(text) or {}
             sleeve = SleeveConfig(**data)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.exception("invalid sleeve config %s: %s", path, exc)
             continue
         out.append(
@@ -234,6 +234,6 @@ async def watch_configs(
             if on_change:
                 try:
                     on_change(ev)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.exception("config on_change handler failed for %s", path)
             yield ev

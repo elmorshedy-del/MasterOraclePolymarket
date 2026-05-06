@@ -26,7 +26,7 @@ class OrderbookStateBucketTag:
         try:
             mid = (bid.price + ask.price) / Decimal(2)
             tob_usd = (bid.size + ask.size) * mid
-        except Exception:  # noqa: BLE001
+        except Exception:
             return "unknown"
 
         if tob_usd < Decimal("500"):

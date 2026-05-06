@@ -19,10 +19,9 @@ class as the live runner, so behavior matches.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -30,21 +29,19 @@ from uuid import UUID, uuid4
 
 import orjson
 
-from src.core import config as cfg
 from src.core import plugin_loader
 from src.core.events import (
     EventType,
     MarketEvent,
     Order,
-    OrderType,
+    OrderBook,
     PriceLevel,
     Side,
     Signal,
 )
-from src.core.events import OrderBook
 from src.core.interfaces import Strategy
-from src.db.connection import get_pool
 from src.db import writers as db_writers
+from src.db.connection import get_pool
 from src.execution.event_replay import EventReplayFillSimulator
 from src.execution.position_tracker import PositionTracker
 
@@ -100,20 +97,44 @@ class ReplayEngine:
     ) -> ReplayResult:
         if strategy_name not in self._strategies:
             raise ValueError(f"unknown strategy: {strategy_name}")
-        # Build a FRESH strategy per replay so configs aren't shared between
-        # replay jobs (and so per-config params from a sleeve YAML can be
-        # passed in via overrides if the API surfaces it later). Today this
-        # rebuilds with defaults; the hook is in place for sleeve-specific
-        # replays once Strategy Lab passes a sleeve_id.
         template = self._strategies[strategy_name]
-        try:
-            strategy = type(template)()
-        except TypeError:
-            strategy = template  # fallback for non-default-constructible plugins
         overrides = overrides or ReplayOverrides()
 
+        # Resolve sleeve YAML params for this (strategy, config_id). Replay
+        # is config-true: aggressive / conservative / etc. produce DIFFERENT
+        # results because they construct the strategy with different params.
+        sleeve_params: dict[str, Any] = {}
+        sleeve_edge_class = edge_class
+        try:
+            from src.core import config as cfg
+            for ls in cfg.load_sleeves(REPO_ROOT / "src" / "configs" / "sleeves"):
+                if (
+                    ls.sleeve.strategy == strategy_name
+                    and ls.sleeve.config_id == config_id
+                ):
+                    sleeve_params = dict(ls.sleeve.params or {})
+                    if sleeve_edge_class is None and ls.sleeve.edge_class:
+                        sleeve_edge_class = ls.sleeve.edge_class
+                    break
+        except Exception:
+            logger.exception("failed to load sleeve params for %s/%s",
+                             strategy_name, config_id)
+
+        # Build a FRESH strategy per replay with the YAML params applied so
+        # 'aggressive' actually fires more / sizes bigger, etc. Falls back
+        # to default-constructed if the strategy rejects the kwargs.
+        try:
+            strategy = type(template)(**sleeve_params)
+        except TypeError:
+            try:
+                strategy = type(template)()
+            except TypeError:
+                strategy = template
+        if sleeve_edge_class is not None:
+            edge_class = sleeve_edge_class
+
         if range_end is None:
-            range_end = datetime.now(tz=timezone.utc)
+            range_end = datetime.now(tz=UTC)
         if range_start is None:
             from datetime import timedelta
             range_start = range_end - timedelta(days=30)
@@ -152,7 +173,7 @@ class ReplayEngine:
                     enabled=True,
                     config_hash=config_hash,
                 )
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("failed to register replay run %s", run_id)
 
         # Simulator + tracker
@@ -182,6 +203,16 @@ class ReplayEngine:
         trades_count = 0
         trade_rows: list[tuple[Any, ...]] = []
 
+        # Pending orders queued by latency (eta, order). Each iteration we
+        # drain any whose eta has passed, then submit against the book state
+        # AT THAT TIME. This is what makes the latency_ms override actually
+        # affect replay fills — without this, orders always saw the
+        # zero-latency book and the preset was misleading.
+        from datetime import timedelta
+        from heapq import heappop, heappush
+        pending: list[tuple[datetime, Order]] = []
+        latency_delay = timedelta(milliseconds=latency_model.total_ms())
+
         # PERSISTENT per-strategy state across the entire replay. Strategies
         # rely on this dict for in-strategy book reconstruction (book_state),
         # market-meta cache, cooldowns, active position sets, etc. Resetting
@@ -194,10 +225,27 @@ class ReplayEngine:
         }
 
         async for event in self._stream_events(range_start, range_end, overrides.market_filter):
-            # Maintain book state
+            # 1) Drain any latency-deferred orders whose eta has passed.
+            #    They submit against the book state AS OF NOW (post any
+            #    book updates that happened between signal-time and eta).
+            while pending and pending[0][0] <= event.ts:
+                _eta, _order = heappop(pending)
+                _book = books.get((_order.market_id, _order.asset_id))
+                if _book is not None:
+                    for _fill in await sim.submit(_order, _book):
+                        fills_count += 1
+                        _trade = tracker.on_fill(_fill, strategy_name, config_id, config_hash)
+                        if _trade is not None:
+                            trades_count += 1
+                            try:
+                                await db_writers.insert_trade(_trade, config_hash, source="replay")
+                            except Exception:
+                                logger.exception("failed to write replay trade")
+
+            # 2) Maintain book state with this event
             self._apply_event_to_book(event, books)
 
-            # Tick simulator on_event for resting orders
+            # 3) Tick simulator on_event for resting orders
             if event.market_id and event.asset_id:
                 book = books.get((event.market_id, event.asset_id))
                 if book is not None:
@@ -208,10 +256,10 @@ class ReplayEngine:
                         if trade is not None:
                             trades_count += 1
 
-            # Dispatch event to strategy with PERSISTENT state
+            # 4) Dispatch event to strategy with PERSISTENT state
             try:
                 signals: list[Signal] = await strategy.on_event(event, strategy_state)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("strategy %s raised during replay event %s",
                                  strategy_name, event.event_id)
                 continue
@@ -256,6 +304,7 @@ class ReplayEngine:
                 if book is None:
                     continue
 
+                eta = event.ts + latency_delay
                 order = Order(
                     order_id=uuid4(),
                     signal_id=sig.signal_id,
@@ -267,19 +316,42 @@ class ReplayEngine:
                     price=sig.price,
                     size=sig.size,
                     ts_signal=sig.ts_signal,
-                    ts_placed=event.ts,   # in replay, latency = same-event
+                    ts_placed=eta,
                 )
 
-                fills = await sim.submit(order, book)
-                for fill in fills:
-                    fills_count += 1
-                    trade = tracker.on_fill(fill, strategy_name, config_id, config_hash)
-                    if trade is not None:
-                        trades_count += 1
-                        try:
-                            await db_writers.insert_trade(trade, config_hash, source="replay")
-                        except Exception:  # noqa: BLE001
-                            logger.exception("failed to write replay trade %s", trade.trade_id)
+                if latency_delay.total_seconds() <= 0:
+                    # Zero-latency fast path — submit immediately.
+                    fills = await sim.submit(order, book)
+                    for fill in fills:
+                        fills_count += 1
+                        trade = tracker.on_fill(fill, strategy_name, config_id, config_hash)
+                        if trade is not None:
+                            trades_count += 1
+                            try:
+                                await db_writers.insert_trade(trade, config_hash, source="replay")
+                            except Exception:
+                                logger.exception("failed to write replay trade %s", trade.trade_id)
+                else:
+                    # Defer until book state has caught up to eta. Drained
+                    # at the top of the next iteration whose event.ts >= eta.
+                    heappush(pending, (eta, order))
+
+        # Final drain — any orders still pending after the stream ends submit
+        # against the last-known book state.
+        while pending:
+            _eta, _order = heappop(pending)
+            _book = books.get((_order.market_id, _order.asset_id))
+            if _book is None:
+                continue
+            for _fill in await sim.submit(_order, _book):
+                fills_count += 1
+                _trade = tracker.on_fill(_fill, strategy_name, config_id, config_hash)
+                if _trade is not None:
+                    trades_count += 1
+                    try:
+                        await db_writers.insert_trade(_trade, config_hash, source="replay")
+                    except Exception:
+                        pass
 
         # Compute summary metrics
         from src.analytics.metric_service import MetricService
@@ -324,7 +396,7 @@ class ReplayEngine:
                     }).decode(),
                     run_id,
                 )
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("failed to mark replay %s complete", run_id)
 
         return result
@@ -396,7 +468,7 @@ class ReplayEngine:
                 if isinstance(payload, str):
                     try:
                         payload = orjson.loads(payload)
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         payload = {}
                 yield MarketEvent(
                     event_id=r["event_id"] if isinstance(r["event_id"], UUID) else UUID(str(r["event_id"])),
@@ -432,7 +504,7 @@ class ReplayEngine:
                     PriceLevel(price=Decimal(str(a["price"])), size=Decimal(str(a["size"])))
                     for a in event.payload.get("asks", [])
                 ]
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return
             books[key] = OrderBook(
                 market_id=event.market_id,
