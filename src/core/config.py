@@ -186,6 +186,8 @@ def load_sleeves(sleeves_dir: Path) -> list[LoadedSleeveConfig]:
 
     out: list[LoadedSleeveConfig] = []
     for path in sorted(sleeves_dir.glob("*.yaml")):
+        if path.name.startswith("_"):
+            continue
         text = path.read_text()
         try:
             data = yaml.safe_load(text) or {}

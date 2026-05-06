@@ -162,10 +162,12 @@ class Runner:
         edge_class_by_sleeve = {
             ls.sleeve.sleeve_id: ls.sleeve.edge_class or ""
             for ls in self.sleeves
+            if ls.sleeve.enabled
         }
         starting_capital = {
             ls.sleeve.sleeve_id: ls.sleeve.starting_capital_usd
             for ls in self.sleeves
+            if ls.sleeve.enabled
         }
         self.position_tracker = PositionTracker(
             sleeve_starting_capital=starting_capital,

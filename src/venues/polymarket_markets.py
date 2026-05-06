@@ -11,6 +11,7 @@ list and (b) market resolutions arrive here as ``MARKET_RESOLVED`` events.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from collections.abc import AsyncIterator, Iterable
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 VENUE = "polymarket"
-DEFAULT_API_BASE = "https://data-api.polymarket.com"
+DEFAULT_GAMMA_API_BASE = "https://gamma-api.polymarket.com"
 
 
 class PolymarketMarkets:
@@ -38,7 +39,11 @@ class PolymarketMarkets:
         top_n: int = 1000,
         enabled: bool = True,
     ) -> None:
-        self.api_base = api_base or os.environ.get("POLYMARKET_DATA_API_URL", DEFAULT_API_BASE)
+        self.api_base = (
+            api_base
+            or os.environ.get("POLYMARKET_GAMMA_API_URL")
+            or DEFAULT_GAMMA_API_BASE
+        )
         self.poll_interval_secs = poll_interval_secs
         self.top_n = top_n
         self.enabled = enabled
@@ -163,12 +168,17 @@ class PolymarketMarkets:
         assert self._client is not None
         self.requests_made += 1
 
-        # The data API exposes /markets; fall back gracefully if it shifts.
-        for path in ("/markets", "/v1/markets"):
+        for path in ("/markets/keyset", "/markets"):
             try:
                 resp = await self._client.get(
                     path,
-                    params={"limit": self.top_n, "active": "true"},
+                    params={
+                        "limit": self.top_n,
+                        "active": "true",
+                        "closed": "false",
+                        "order": "volume_24hr",
+                        "ascending": "false",
+                    },
                 )
                 if resp.status_code == 404:
                     continue
@@ -195,9 +205,11 @@ def _parse_market(raw: dict) -> MarketMeta | None:
         if not market_id:
             return None
 
-        # Asset ids — Polymarket markets often have a ``tokens`` array with token_id
-        asset_ids: list[str] = []
-        for token in raw.get("tokens", []):
+        asset_ids = _parse_asset_ids(raw)
+
+        # Asset ids — older Polymarket shapes often have a ``tokens`` array
+        # with token_id. Gamma now returns JSON-encoded ``clobTokenIds``.
+        for token in raw.get("tokens") or []:
             tid = token.get("token_id") or token.get("id")
             if tid:
                 asset_ids.append(str(tid))
@@ -244,6 +256,20 @@ def _parse_market(raw: dict) -> MarketMeta | None:
     except Exception:
         logger.exception("failed to parse market: %s", raw.get("id") if isinstance(raw, dict) else "?")
         return None
+
+
+def _parse_asset_ids(raw: dict) -> list[str]:
+    token_ids = raw.get("clobTokenIds") or raw.get("clob_token_ids")
+    if isinstance(token_ids, str):
+        try:
+            parsed = json.loads(token_ids)
+        except json.JSONDecodeError:
+            parsed = []
+    elif isinstance(token_ids, list):
+        parsed = token_ids
+    else:
+        parsed = []
+    return [str(token_id) for token_id in parsed if token_id]
 
 
 def plugin() -> PolymarketMarkets:

@@ -104,12 +104,16 @@ class PolymarketActivity:
     async def _fetch_recent(self) -> list[dict]:
         assert self._client is not None
         self.requests_made += 1
-        # The activity endpoint name and params have shifted historically; this
-        # helper tries the most-current path and returns an empty list on 404,
-        # which lets the platform keep running while we update the path.
-        for path in ("/activity", "/trades"):
+        activity_user = os.environ.get("POLYMARKET_ACTIVITY_USER")
+        endpoints: list[tuple[str, dict[str, int | str]]] = [
+            ("/trades", {"limit": self.page_size}),
+        ]
+        if activity_user:
+            endpoints.append(("/activity", {"limit": self.page_size, "user": activity_user}))
+
+        for path, params in endpoints:
             try:
-                resp = await self._client.get(path, params={"limit": self.page_size})
+                resp = await self._client.get(path, params=params)
                 if resp.status_code == 404:
                     continue
                 resp.raise_for_status()

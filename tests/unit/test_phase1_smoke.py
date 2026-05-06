@@ -85,6 +85,28 @@ def test_polymarket_clob_normalize_unknown_event_returns_none():
     assert _normalize({}) is None
 
 
+def test_polymarket_markets_parses_gamma_clob_token_ids():
+    from src.venues.polymarket_markets import _parse_market
+
+    meta = _parse_market({
+        "id": "540816",
+        "conditionId": "0xabc",
+        "slug": "sample-market",
+        "question": "Sample market?",
+        "clobTokenIds": '["yes-token", "no-token"]',
+        "endDate": "2026-07-31T12:00:00Z",
+        "orderPriceMinTickSize": "0.01",
+        "volume24hr": 123.45,
+        "liquidity": "1000",
+        "active": True,
+        "closed": False,
+    })
+
+    assert meta is not None
+    assert meta.market_id == "0xabc"
+    assert meta.asset_ids == ("yes-token", "no-token")
+
+
 def test_news_rss_canonical_url_dedupe_setup():
     """News adapter should construct without errors and have empty seen-set initially."""
     from src.venues.news_rss import NewsRSS

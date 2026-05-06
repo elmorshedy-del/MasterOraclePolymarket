@@ -14,10 +14,37 @@ import pytest
 from src.core import config as cfg
 from src.core import plugin_loader
 from src.core.events import RuntimeMode
-from src.runner.main import _instantiate_with_params
+from src.runner.main import Runner, _instantiate_with_params
 from src.runner.strategy_runner import StrategyRunner
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+# ---------------------------------------------------------------------------
+# Sleeve config loading — templates stay out of runtime state
+# ---------------------------------------------------------------------------
+
+
+def test_sleeve_loader_ignores_underscore_templates():
+    sleeves = cfg.load_sleeves(REPO_ROOT / "src" / "configs" / "sleeves")
+    sleeve_ids = {s.sleeve.sleeve_id for s in sleeves}
+
+    assert "example_sleeve" not in sleeve_ids
+
+
+@pytest.mark.asyncio
+async def test_runner_position_tracker_registers_only_enabled_sleeves():
+    runner = Runner()
+    runner.system_cfg = cfg.load_system_config(REPO_ROOT / "src" / "configs" / "system")
+    runner.sleeves = cfg.load_sleeves(REPO_ROOT / "src" / "configs" / "sleeves")
+
+    await runner._init_execution_layer()
+
+    assert runner.position_tracker is not None
+    tracked_ids = set(runner.position_tracker.all_sleeve_ids())
+    assert "cross_outcome_arb__default" in tracked_ids
+    assert "cross_outcome_arb__aggressive" not in tracked_ids
+    assert "cross_outcome_arb__conservative" not in tracked_ids
 
 
 # ---------------------------------------------------------------------------
