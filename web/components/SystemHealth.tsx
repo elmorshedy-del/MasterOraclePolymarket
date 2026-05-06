@@ -2,6 +2,8 @@
 
 import useSWR from "swr";
 
+import { fetcher } from "@/lib/utils";
+
 type Health = {
   checked_at: string;
   db: {
@@ -16,8 +18,6 @@ type Health = {
     deltas_applied_total: number;
   };
 };
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function SystemHealth() {
   const { data, error, isLoading } = useSWR<Health>(

@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+import { fetcher } from "@/lib/utils";
 
 export function useApi<T>(path: string | null, refreshMs?: number) {
   return useSWR<T>(path ? `/api/backend${path}` : null, fetcher, {
