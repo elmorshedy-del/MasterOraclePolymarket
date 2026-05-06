@@ -56,6 +56,10 @@ class TagService:
         logger.info("tag service loaded %d tags: %s",
                     len(self.tags), [t.name for t in self.tags])
 
+    @property
+    def tag_names(self) -> list[str]:
+        return [tag.name for tag in self.tags]
+
     # ------------------------------------------------------------------------
     # Live tagging
     # ------------------------------------------------------------------------
