@@ -73,6 +73,12 @@ async def system_health() -> dict[str, object]:
     db_status = "unknown"
     db_now: str | None = None
     metrics: dict[str, Any] = {}
+    orderbook_metrics = {
+        "markets_seen": 0,
+        "asset_books_seen": 0,
+        "book_snapshots": 0,
+        "book_deltas": 0,
+    }
     try:
         pool = await get_pool()
         async with pool.acquire() as conn:
@@ -91,17 +97,45 @@ async def system_health() -> dict[str, object]:
             metrics["open_positions"] = await conn.fetchval(
                 "SELECT count(*) FROM paper_positions WHERE size > 0"
             )
+            orderbook_row = await conn.fetchrow(
+                """
+                SELECT
+                    count(DISTINCT market_id) FILTER (
+                        WHERE event_type IN ('book_snapshot', 'book_delta', 'trade_print')
+                          AND market_id IS NOT NULL
+                    ) AS markets_seen,
+                    count(DISTINCT market_id || ':' || asset_id) FILTER (
+                        WHERE event_type IN ('book_snapshot', 'book_delta', 'trade_print')
+                          AND market_id IS NOT NULL
+                          AND asset_id IS NOT NULL
+                    ) AS asset_books_seen,
+                    count(*) FILTER (WHERE event_type = 'book_snapshot') AS book_snapshots,
+                    count(*) FILTER (WHERE event_type = 'book_delta') AS book_deltas
+                FROM market_events
+                WHERE ts > now() - interval '5 minutes'
+                """
+            )
+            if orderbook_row is not None:
+                orderbook_metrics = {
+                    key: int(orderbook_row[key] or 0)
+                    for key in orderbook_metrics
+                }
     except Exception as exc:
         db_status = f"error: {exc!s}"
+
+    markets_count = STORE.market_count() or orderbook_metrics["markets_seen"]
+    asset_books_count = STORE.asset_count() or orderbook_metrics["asset_books_seen"]
+    snapshots_count = STORE.snapshots_applied or orderbook_metrics["book_snapshots"]
+    deltas_count = STORE.deltas_applied or orderbook_metrics["book_deltas"]
 
     return {
         "checked_at": datetime.now(tz=UTC).isoformat(),
         "db": {"status": db_status, "server_time": db_now, **metrics},
         "orderbooks": {
-            "markets_in_memory": STORE.market_count(),
-            "asset_books_in_memory": STORE.asset_count(),
-            "snapshots_applied_total": STORE.snapshots_applied,
-            "deltas_applied_total": STORE.deltas_applied,
+            "markets_in_memory": markets_count,
+            "asset_books_in_memory": asset_books_count,
+            "snapshots_applied_total": snapshots_count,
+            "deltas_applied_total": deltas_count,
         },
     }
 

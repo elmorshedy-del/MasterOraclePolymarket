@@ -54,21 +54,21 @@ export function SystemHealth() {
             ok={eventsHealthy}
           />
           <Row
-            label="Markets in memory"
+            label="Markets seen (5m)"
             value={data.orderbooks.markets_in_memory.toLocaleString()}
             ok={data.orderbooks.markets_in_memory > 0}
           />
           <Row
-            label="Asset books"
+            label="Asset books seen"
             value={data.orderbooks.asset_books_in_memory.toLocaleString()}
             ok={data.orderbooks.asset_books_in_memory > 0}
           />
           <Row
-            label="Book snapshots"
+            label="Book snapshots (5m)"
             value={data.orderbooks.snapshots_applied_total.toLocaleString()}
           />
           <Row
-            label="Book deltas"
+            label="Book deltas (5m)"
             value={data.orderbooks.deltas_applied_total.toLocaleString()}
           />
         </dl>
