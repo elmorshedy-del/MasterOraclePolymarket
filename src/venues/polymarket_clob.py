@@ -58,16 +58,24 @@ class PolymarketCLOB:
         enabled: bool = True,
     ) -> None:
         self.ws_url = ws_url or os.environ.get("POLYMARKET_CLOB_WS_URL", DEFAULT_WS_URL)
+        # REST endpoint for stale-book refresh — defaults to the public CLOB
+        # API. Override via env for proxies / mirrors.
+        self.rest_base = os.environ.get(
+            "POLYMARKET_CLOB_REST_URL", "https://clob.polymarket.com"
+        )
         self._asset_ids: list[str] = list(asset_ids)
         self.enabled = enabled
 
         self._ws: ReconnectingWS | None = None
         self._stop = asyncio.Event()
+        self._rest_client = None  # lazy httpx.AsyncClient
 
         # Telemetry
         self.events_emitted: int = 0
         self.last_event_at: datetime | None = None
         self.subscribed_assets: int = 0
+        self.rest_book_refreshes: int = 0
+        self.rest_book_failures: int = 0
 
     # -----------------------------------------------------------------------
     # Public mutators
@@ -89,6 +97,58 @@ class PolymarketCLOB:
         """
         if self._ws is not None:
             await self._ws.cycle()
+
+    async def fetch_book_rest(self, market_id: str, asset_id: str) -> bool:
+        """Hit Polymarket's REST /book?token_id=... and update STORE in place.
+
+        Used by the runner's stale-book fallback when the WS hasn't ticked
+        recently. Returns True if STORE was updated, False otherwise.
+
+        Best-effort: failures are logged + counted, not raised, so a single
+        REST hiccup doesn't block trading. The runner falls through to the
+        cached book and tags realism appropriately.
+        """
+        try:
+            import httpx
+            from src.venues._orderbook_store import STORE
+            from datetime import datetime as _dt
+            from datetime import timezone as _tz
+
+            if self._rest_client is None:
+                self._rest_client = httpx.AsyncClient(
+                    base_url=self.rest_base,
+                    timeout=5.0,
+                    headers={"Accept": "application/json"},
+                )
+
+            resp = await self._rest_client.get(
+                "/book", params={"token_id": asset_id}
+            )
+            if resp.status_code != 200:
+                self.rest_book_failures += 1
+                return False
+            data = resp.json() or {}
+            from decimal import Decimal as _D
+            bids = [
+                (_D(str(b["price"])), _D(str(b["size"])))
+                for b in data.get("bids", []) if "price" in b and "size" in b
+            ]
+            asks = [
+                (_D(str(a["price"])), _D(str(a["size"])))
+                for a in data.get("asks", []) if "price" in a and "size" in a
+            ]
+            STORE.apply_snapshot(
+                market_id=market_id,
+                asset_id=asset_id,
+                bids=bids,
+                asks=asks,
+                ts=_dt.now(tz=_tz.utc),
+            )
+            self.rest_book_refreshes += 1
+            return True
+        except Exception:  # noqa: BLE001
+            self.rest_book_failures += 1
+            return False
 
     # -----------------------------------------------------------------------
     # MarketDataSource interface

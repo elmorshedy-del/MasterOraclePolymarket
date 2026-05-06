@@ -298,6 +298,11 @@ class Fill:
     ts_filled: datetime
     realism_flag: RealismFlag
     gas_cost: Decimal = Decimal("0.10")
+    # Slippage in basis points vs the book mid AT SIGNAL TIME, computed
+    # from the level-by-level walk in _fill_taker. Positive = adverse
+    # (we paid worse than mid). None when not applicable (maker fills,
+    # missed fills, or no mid available at signal time).
+    slippage_bps: Decimal | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -326,4 +331,9 @@ class Trade:
     pnl_after_haircut: Decimal | None
     realism_flag: RealismFlag
     fill_type: FillType
+    # Average slippage_bps across the entry + exit fills, weighted by size.
+    # Surfaces in the matrix as a pivot dimension (slippage_bucket) and on
+    # the sleeve scorecard as a measured friction — replaces the old
+    # literature-based haircut as the headline gap-to-real-money metric.
+    slippage_bps: Decimal | None = None
     tags: dict[str, Any] = field(default_factory=dict)

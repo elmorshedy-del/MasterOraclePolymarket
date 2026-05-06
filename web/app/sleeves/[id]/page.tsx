@@ -60,6 +60,9 @@ export default function SleeveDetailPage({ params }: { params: Promise<{ id: str
           ["Win rate", `${((metrics.win_rate ?? 0) * 100).toFixed(1)}%`, null],
           ["Profit factor", (metrics.profit_factor ?? 0).toFixed(2), null],
           ["Avg trade", formatUsd(metrics.avg_trade ?? 0, { sign: true }), null],
+          // Walk-derived measured friction; replaces the literature haircut
+          // as the headline gap-to-real-money signal.
+          ["Avg slippage", `${(metrics.avg_slippage_bps ?? 0).toFixed(1)} bps`, null],
           ["Capacity", `${((metrics.capacity_estimate ?? 0) * 100).toFixed(2)}%`, null],
         ].map(([label, value, color]) => (
           <div key={label as string} className="rounded-lg border border-border/60 bg-card p-4">

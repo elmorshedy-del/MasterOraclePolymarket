@@ -21,6 +21,7 @@ const DIMS = [
   "fill_type",
   "realism_flag",
   "source",
+  "slippage_bucket",   // walk-derived; the honest gap-to-real-money pivot
 ];
 
 const METRICS = ["total_pnl", "trade_count", "win_rate", "avg_pnl"];
