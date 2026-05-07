@@ -154,7 +154,7 @@ export default function FailuresPage() {
                       className="h-full rounded-full transition-all duration-500"
                       style={{
                         width: `${share * 100}%`,
-                        background: `hsl(var(--loss) / ${0.5 + severity * 0.4})`,
+                        backgroundColor: "hsl(var(--loss) / " + (0.5 + severity * 0.4) + ")",
                       }}
                     />
                   </div>
