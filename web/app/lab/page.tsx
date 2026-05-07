@@ -28,11 +28,18 @@ type Job = {
 };
 
 const PRESETS = [
-  { name: "Test at 100ms latency", overrides: { latency_ms: 100 } },
-  { name: "Test at 500ms latency", overrides: { latency_ms: 500 } },
-  { name: "Test at 2x size", overrides: { size_multiplier: 2 } },
-  { name: "Test with 0% haircut", overrides: { haircut_override: 0 } },
-];
+  { name: "100ms latency",  overrides: { latency_ms: 100 },      accent: "sky" },
+  { name: "500ms latency",  overrides: { latency_ms: 500 },      accent: "amber" },
+  { name: "2× size",        overrides: { size_multiplier: 2 },   accent: "highlight" },
+  { name: "0% haircut",     overrides: { haircut_override: 0 },  accent: "profit" },
+] as const;
+
+const STATUS_CLS: Record<string, string> = {
+  finished: "text-profit",
+  failed:   "text-loss",
+  running:  "text-amber-400",
+  pending:  "text-muted-foreground",
+};
 
 export default function StrategyLabPage() {
   const { data: strategiesResp } = useSWR<{ strategies: StrategyInfo[] }>(
@@ -52,7 +59,6 @@ export default function StrategyLabPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Pull sleeve YAMLs so user can pick aggressive / conservative / etc.
   const { data: sleevesResp } = useSWR<{ sleeves: { sleeve_id: string; strategy_name: string; config_id: string }[] }>(
     "/api/backend/system/sleeves",
     fetcher,
@@ -71,7 +77,7 @@ export default function StrategyLabPage() {
       try {
         overrides = JSON.parse(overrideJson || "{}");
       } catch {
-        setError("overrides must be valid JSON");
+        setError("Overrides must be valid JSON");
         setSubmitting(false);
         return;
       }
@@ -83,138 +89,183 @@ export default function StrategyLabPage() {
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       await refetchJobs();
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSubmitting(false);
     }
   }
 
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Strategy Lab</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Replay any strategy against recorded events. Apply overrides to ask "what if".
-        </p>
-      </div>
+  const jobs = jobsResp?.jobs ?? [];
 
-      <section className="space-y-4 rounded-lg border border-border/60 bg-card p-6">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Strategy</label>
+  return (
+    <div className="space-y-10">
+
+      {/* Hero */}
+      <section>
+        <h1 className="text-[2rem] font-bold tracking-tight">Strategy Lab</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Replay any strategy against recorded events. Apply overrides to ask &ldquo;what if&rdquo;.
+        </p>
+      </section>
+
+      {/* Run form */}
+      <section className="space-y-5 rounded-xl border border-border/60 bg-card p-6">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+          Configure replay
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FormField label="Strategy">
             <select
               value={strategy}
               onChange={(e) => { setStrategy(e.target.value); setConfigId("default"); }}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="w-full cursor-pointer rounded-xl border border-border bg-background px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">— select —</option>
               {(strategiesResp?.strategies ?? []).map((s) => (
-                <option key={s.name} value={s.name}>{s.name} {s.edge_class ? `· ${s.edge_class}` : ""}</option>
+                <option key={s.name} value={s.name}>
+                  {s.name}{s.edge_class ? ` · ${s.edge_class}` : ""}
+                </option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Config</label>
+          </FormField>
+
+          <FormField label="Config">
             <select
               value={configId}
               onChange={(e) => setConfigId(e.target.value)}
               disabled={!strategy}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm disabled:opacity-40"
+              className="w-full cursor-pointer rounded-xl border border-border bg-background px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
             >
               {availableConfigs.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Days back</label>
+          </FormField>
+
+          <FormField label="Days back">
             <input
               type="number"
               min={1}
               max={365}
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
             />
-          </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Overrides (JSON)
-            </label>
+          </FormField>
+
+          <FormField label="Overrides (JSON)">
             <input
               value={overrideJson}
               onChange={(e) => setOverrideJson(e.target.value)}
               placeholder='{"latency_ms": 100}'
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 font-mono text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
             />
-          </div>
+          </FormField>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-4">
           <button
             disabled={!strategy || submitting}
             onClick={() => submit()}
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:opacity-40"
+            className="cursor-pointer rounded-xl bg-foreground px-5 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Run replay
+            {submitting ? "Running…" : "Run replay"}
           </button>
-          <span className="text-xs text-muted-foreground self-center">— or one-click presets:</span>
+
+          <div className="mx-1 hidden text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 sm:block">or preset</div>
+
           {PRESETS.map((p) => (
             <button
               key={p.name}
               disabled={!strategy || submitting}
               onClick={() => submit(p.overrides)}
-              className="rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-40"
+              className="cursor-pointer rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
               {p.name}
             </button>
           ))}
         </div>
-        {error && <div className="text-xs text-loss">{error}</div>}
+
+        {error && (
+          <div className="flex items-center gap-2 rounded-lg border border-loss/30 bg-loss/10 px-3 py-2 text-xs text-loss">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+              <circle cx="6" cy="6" r="5" />
+              <path d="M6 4v2.5M6 8h.01" />
+            </svg>
+            {error}
+          </div>
+        )}
       </section>
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Recent replay jobs</h2>
-        <div className="overflow-hidden rounded-lg border border-border/60">
-          <table className="w-full text-xs">
-            <thead className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
+      {/* Jobs table */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight">Recent Replay Jobs</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Auto-refreshes every 5s</p>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-border/60">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border/60 bg-muted/30 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
               <tr>
-                <th className="px-3 py-2 text-left">Submitted</th>
-                <th className="px-3 py-2 text-left">Strategy</th>
-                <th className="px-3 py-2 text-left">Window</th>
-                <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-3 py-2 text-right">Trades</th>
-                <th className="px-3 py-2 text-right">Realized</th>
+                <th className="px-4 py-3 text-left">Submitted</th>
+                <th className="px-4 py-3 text-left">Strategy</th>
+                <th className="px-4 py-3 text-left">Window</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-right">Trades</th>
+                <th className="px-4 py-3 text-right">Realized P&L</th>
               </tr>
             </thead>
             <tbody>
-              {(jobsResp?.jobs ?? []).map((j) => (
-                <tr key={j.job_id} className="border-t border-border/40">
-                  <td className="px-3 py-2 text-muted-foreground">{new Date(j.submitted_at).toLocaleString()}</td>
-                  <td className="px-3 py-2">{j.strategy_name}</td>
-                  <td className="px-3 py-2 text-muted-foreground">
+              {jobs.map((j) => (
+                <tr key={j.job_id} className="border-t border-border/40 hover:bg-muted/20">
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {new Date(j.submitted_at).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="font-medium">{j.strategy_name}</div>
+                    <div className="text-xs text-muted-foreground/70">{j.config_id}</div>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
                     {new Date(j.range_start).toLocaleDateString()} → {new Date(j.range_end).toLocaleDateString()}
                   </td>
-                  <td className={cn(
-                    "px-3 py-2",
-                    j.status === "finished" ? "text-profit" : j.status === "failed" ? "text-loss" : "text-muted-foreground",
-                  )}>
+                  <td className={cn("px-4 py-2.5 font-mono text-xs font-semibold uppercase tracking-wide", STATUS_CLS[j.status] ?? "text-muted-foreground")}>
                     {j.status}
+                    {j.status === "running" && (
+                      <span
+                        className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-400"
+                        style={{ animation: "pulse-dot 2s ease-in-out infinite" }}
+                      />
+                    )}
                   </td>
-                  <td className="px-3 py-2 text-right font-mono">{j.result?.trades ?? "—"}</td>
-                  <td className="px-3 py-2 text-right font-mono">
+                  <td className="px-4 py-2.5 text-right font-mono">{j.result?.trades ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">
                     {j.result ? formatUsd(Number(j.result.realized_pnl), { sign: true }) : "—"}
                   </td>
                 </tr>
               ))}
-              {(jobsResp?.jobs ?? []).length === 0 && (
-                <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No replay jobs yet.</td></tr>
+              {jobs.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground/60">
+                    No replay jobs yet. Configure a run above.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
     </div>
+  );
+}
+
+function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="space-y-1.5">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{label}</div>
+      {children}
+    </label>
   );
 }

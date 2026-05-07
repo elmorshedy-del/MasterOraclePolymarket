@@ -38,25 +38,37 @@ export function SleevesTable() {
   const sleeves = data?.sleeves ?? [];
   if (sleeves.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
-        No sleeves configured yet. Drop a YAML in{" "}
-        <code className="rounded bg-muted px-1.5 py-0.5 text-[12px]">src/configs/sleeves/</code>.
+      <div className="flex flex-col items-center rounded-xl border border-dashed border-border/50 bg-card/40 px-6 py-14 text-center">
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-muted">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" className="text-muted-foreground" aria-hidden="true">
+            <rect x="1" y="1" width="6" height="6" rx="1.25" />
+            <rect x="11" y="1" width="6" height="6" rx="1.25" />
+            <rect x="1" y="11" width="6" height="6" rx="1.25" />
+            <rect x="11" y="11" width="6" height="6" rx="1.25" />
+          </svg>
+        </div>
+        <p className="text-sm font-semibold text-foreground">No sleeves configured</p>
+        <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-muted-foreground">
+          Drop a YAML in{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-[11px]">src/configs/sleeves/</code>
+          {" "}to start running a strategy.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/60">
+    <div className="overflow-hidden rounded-xl border border-border/60">
       <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+        <thead className="border-b border-border/60 bg-muted/30 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
           <tr>
-            <th className="px-4 py-2 text-left">Sleeve</th>
-            <th className="px-4 py-2 text-left">Strategy / Config</th>
-            <th className="px-4 py-2 text-left">Mode</th>
-            <th className="px-4 py-2 text-right">Starting</th>
-            <th className="px-4 py-2 text-right">Realized</th>
-            <th className="px-4 py-2 text-right">Capital</th>
-            <th className="px-4 py-2 text-right">Open</th>
+            <th className="px-4 py-3 text-left">Sleeve</th>
+            <th className="px-4 py-3 text-left">Strategy / Config</th>
+            <th className="px-4 py-3 text-left">Mode</th>
+            <th className="px-4 py-3 text-right">Starting</th>
+            <th className="px-4 py-3 text-right">Realized</th>
+            <th className="px-4 py-3 text-right">Capital</th>
+            <th className="px-4 py-3 text-right">Open</th>
           </tr>
         </thead>
         <tbody>
@@ -64,34 +76,34 @@ export function SleevesTable() {
             const pnl = Number(s.realized_pnl_usd ?? 0);
             const pnlClass = pnl > 0 ? "text-profit" : pnl < 0 ? "text-loss" : "text-foreground";
             return (
-              <tr key={s.sleeve_id} className="border-t border-border/40 hover:bg-muted/20">
+              <tr key={s.sleeve_id} className="border-t border-border/40 transition-colors hover:bg-muted/20">
                 <td className="px-4 py-3 font-mono text-[13px]">
-                  <Link href={`/sleeves/${encodeURIComponent(s.sleeve_id)}`} className="hover:underline">
+                  <Link href={`/sleeves/${encodeURIComponent(s.sleeve_id)}`} className="cursor-pointer hover:text-highlight hover:underline transition-colors">
                     {s.sleeve_id}
                   </Link>
                 </td>
                 <td className="px-4 py-3">
-                  <div>{s.strategy_name}</div>
-                  <div className="text-xs text-muted-foreground">{s.config_id}</div>
+                  <div className="text-sm">{s.strategy_name}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground/70">{s.config_id}</div>
                 </td>
                 <td className="px-4 py-3">
                   <span className={cn(
-                    "rounded px-2 py-0.5 text-[11px] font-medium",
+                    "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
                     MODE_COLOR[s.mode] ?? "bg-muted text-muted-foreground",
                   )}>
                     {s.mode}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right font-mono">
+                <td className="px-4 py-3 text-right font-mono text-sm">
                   {formatUsd(Number(s.starting_capital_usd), { cents: false })}
                 </td>
-                <td className={cn("px-4 py-3 text-right font-mono", pnlClass)}>
+                <td className={cn("px-4 py-3 text-right font-mono text-sm", pnlClass)}>
                   {formatUsd(pnl, { sign: true })}
                 </td>
-                <td className="px-4 py-3 text-right font-mono">
+                <td className="px-4 py-3 text-right font-mono text-sm">
                   {formatUsd(Number(s.capital_remaining), { cents: false })}
                 </td>
-                <td className="px-4 py-3 text-right font-mono">{s.open_positions}</td>
+                <td className="px-4 py-3 text-right font-mono text-sm">{s.open_positions}</td>
               </tr>
             );
           })}

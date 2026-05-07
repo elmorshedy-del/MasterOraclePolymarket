@@ -25,6 +25,43 @@ type PnlPoint = {
   capital_remaining: number;
 };
 
+type Accent = "profit" | "loss" | "highlight" | "sky" | "amber" | "neutral";
+
+const METRIC_CONFIG: {
+  key: string;
+  label: string;
+  accent: Accent;
+  format: (v: number) => string;
+}[] = [
+  { key: "total_pnl",        label: "Total P&L (haircut)",  accent: "profit",    format: (v) => formatUsd(v, { sign: true }) },
+  { key: "sharpe",           label: "Sharpe",               accent: "highlight", format: (v) => v.toFixed(2) },
+  { key: "sortino",          label: "Sortino",              accent: "sky",       format: (v) => v.toFixed(2) },
+  { key: "max_drawdown",     label: "Max Drawdown",         accent: "loss",      format: (v) => formatUsd(v) },
+  { key: "win_rate",         label: "Win Rate",             accent: "profit",    format: (v) => `${(v * 100).toFixed(1)}%` },
+  { key: "profit_factor",    label: "Profit Factor",        accent: "highlight", format: (v) => v.toFixed(2) },
+  { key: "avg_trade",        label: "Avg Trade",            accent: "sky",       format: (v) => formatUsd(v, { sign: true }) },
+  { key: "avg_slippage_bps", label: "Avg Slippage",         accent: "amber",     format: (v) => `${v.toFixed(1)} bps` },
+  { key: "capacity_estimate",label: "Capacity",             accent: "neutral",   format: (v) => `${(v * 100).toFixed(2)}%` },
+];
+
+const BORDER_CLS: Record<Accent, string> = {
+  profit:    "from-profit/25 via-profit/5 to-transparent",
+  loss:      "from-loss/20 via-loss/5 to-transparent",
+  highlight: "from-highlight/25 via-highlight/5 to-transparent",
+  sky:       "from-sky-500/25 via-sky-500/5 to-transparent",
+  amber:     "from-amber-400/25 via-amber-400/5 to-transparent",
+  neutral:   "from-border/60 via-border/20 to-transparent",
+};
+
+const VALUE_CLS: Record<Accent, string> = {
+  profit:    "text-profit",
+  loss:      "text-loss",
+  highlight: "text-highlight",
+  sky:       "text-sky-400",
+  amber:     "text-amber-400",
+  neutral:   "text-foreground",
+};
+
 export default function SleeveDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: m } = useApi<Metrics>(`/analytics/sleeve_metrics?sleeve_id=${encodeURIComponent(id)}`, 15_000);
@@ -42,51 +79,59 @@ export default function SleeveDetailPage({ params }: { params: Promise<{ id: str
   const points = p?.points ?? [];
 
   return (
-    <div className="space-y-8">
-      <section>
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">Sleeve</div>
-        <h1 className="mt-1 font-mono text-xl font-semibold tracking-tight">{id}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="space-y-10">
+
+      {/* Hero */}
+      <section className="space-y-1">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Sleeve</div>
+        <h1 className="font-mono text-[2rem] font-bold tracking-tight">{id}</h1>
+        <p className="text-sm text-muted-foreground">
           {m?.trade_count ?? 0} trades recorded.
         </p>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        {[
-          ["Total P&L (haircut)", formatUsd(metrics.total_pnl ?? 0, { sign: true }), (metrics.total_pnl ?? 0) >= 0 ? "text-profit" : "text-loss"],
-          ["Sharpe", (metrics.sharpe ?? 0).toFixed(2), null],
-          ["Sortino", (metrics.sortino ?? 0).toFixed(2), null],
-          ["Max DD", formatUsd(metrics.max_drawdown ?? 0), "text-loss"],
-          ["Win rate", `${((metrics.win_rate ?? 0) * 100).toFixed(1)}%`, null],
-          ["Profit factor", (metrics.profit_factor ?? 0).toFixed(2), null],
-          ["Avg trade", formatUsd(metrics.avg_trade ?? 0, { sign: true }), null],
-          // Walk-derived measured friction; replaces the literature haircut
-          // as the headline gap-to-real-money signal.
-          ["Avg slippage", `${(metrics.avg_slippage_bps ?? 0).toFixed(1)} bps`, null],
-          ["Capacity", `${((metrics.capacity_estimate ?? 0) * 100).toFixed(2)}%`, null],
-        ].map(([label, value, color]) => (
-          <div key={label as string} className="rounded-lg border border-border/60 bg-card p-4">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              {label}
+      {/* Metrics grid */}
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {METRIC_CONFIG.map(({ key, label, accent, format }) => {
+          const raw = metrics[key] ?? 0;
+          return (
+            <div
+              key={key}
+              className={cn("rounded-xl bg-gradient-to-br p-px", BORDER_CLS[accent])}
+            >
+              <div className="flex flex-col gap-2 rounded-xl bg-card p-4">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                  {label}
+                </div>
+                <div className={cn("font-mono text-xl font-bold leading-none tracking-tight", VALUE_CLS[accent])}>
+                  {format(raw)}
+                </div>
+              </div>
             </div>
-            <div className={cn("mt-2 font-mono text-lg font-semibold", color as string)}>
-              {value}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Equity curve (30d)</h2>
+      {/* Equity chart */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight">Equity Curve</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">30-day capital remaining</p>
+        </div>
         <EquityChart points={points} />
       </section>
 
+      {/* Promotion */}
       <section>
         <PromotionPanel sleeveId={id} />
       </section>
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Recent trades</h2>
+      {/* Recent trades */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight">Recent Trades</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Latest 100 closed trades</p>
+        </div>
         <TradesTable trades={trades} />
       </section>
     </div>
@@ -96,47 +141,83 @@ export default function SleeveDetailPage({ params }: { params: Promise<{ id: str
 function EquityChart({ points }: { points: PnlPoint[] }) {
   if (points.length < 2) {
     return (
-      <div className="rounded-lg border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
-        Not enough data yet.
+      <div className="flex flex-col items-center rounded-xl border border-dashed border-border/50 bg-card/40 px-6 py-12 text-center">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-muted">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" className="text-muted-foreground" aria-hidden="true">
+            <polyline points="1,12 5,7 9,9 15,3" />
+          </svg>
+        </div>
+        <p className="text-sm font-medium text-muted-foreground">Not enough data yet</p>
+        <p className="mt-1 text-xs text-muted-foreground/60">Equity curve appears after 2+ data points</p>
       </div>
     );
   }
 
-  // Simple inline SVG sparkline — no extra dep, looks good.
   const W = 800;
   const H = 200;
-  const PAD = 12;
-  const xs = points.map((p) => new Date(p.ts).getTime());
-  const ys = points.map((p) => Number(p.capital_remaining));
+  const PAD = 16;
+  const xs = points.map((pt) => new Date(pt.ts).getTime());
+  const ys = points.map((pt) => Number(pt.capital_remaining));
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
   const dx = maxX - minX || 1;
   const dy = maxY - minY || 1;
-  const path = points
-    .map((p, i) => {
-      const x = PAD + ((xs[i] - minX) / dx) * (W - 2 * PAD);
-      const y = H - PAD - ((ys[i] - minY) / dy) * (H - 2 * PAD);
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
+
+  const pts = points.map((pt, i) => ({
+    x: PAD + ((xs[i] - minX) / dx) * (W - 2 * PAD),
+    y: H - PAD - ((ys[i] - minY) / dy) * (H - 2 * PAD),
+  }));
+
+  const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+
+  // Area fill path
+  const areaPath =
+    `M ${pts[0].x.toFixed(1)} ${H} ` +
+    pts.map((p) => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ") +
+    ` L ${pts[pts.length - 1].x.toFixed(1)} ${H} Z`;
+
   const last = ys[ys.length - 1];
   const first = ys[0];
   const positive = last >= first;
+  const colorVar = positive ? "--profit" : "--loss";
+
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-4">
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-48 w-full">
-        <path
-          d={path}
-          stroke={positive ? "hsl(var(--profit))" : "hsl(var(--loss))"}
-          strokeWidth={2}
-          fill="none"
-        />
-      </svg>
-      <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-        <span>start: {formatUsd(first, { cents: false })}</span>
-        <span>now: {formatUsd(last, { cents: false })}</span>
+    <div className="overflow-hidden rounded-xl border border-border/60 bg-card">
+      <div className="px-5 pt-5 pb-3">
+        <svg viewBox={`0 0 ${W} ${H}`} className="h-44 w-full">
+          <defs>
+            <linearGradient id="equity-area-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={`hsl(var(${colorVar}))`} stopOpacity="0.15" />
+              <stop offset="100%" stopColor={`hsl(var(${colorVar}))`} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d={areaPath} fill="url(#equity-area-grad)" />
+          <path
+            d={linePath}
+            stroke={`hsl(var(${colorVar}))`}
+            strokeWidth={2}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          {/* End-point dot */}
+          <circle
+            cx={pts[pts.length - 1].x}
+            cy={pts[pts.length - 1].y}
+            r={4}
+            fill={`hsl(var(${colorVar}))`}
+          />
+        </svg>
+      </div>
+      <div className="flex justify-between border-t border-border/40 px-5 py-3">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+          Start <span className="ml-1 font-mono text-xs font-semibold text-foreground">{formatUsd(first, { cents: false })}</span>
+        </div>
+        <div className={cn("text-[10px] font-bold uppercase tracking-widest", positive ? "text-profit/70" : "text-loss/70")}>
+          Now <span className={cn("ml-1 font-mono text-xs font-bold", positive ? "text-profit" : "text-loss")}>{formatUsd(last, { cents: false })}</span>
+        </div>
       </div>
     </div>
   );
@@ -145,24 +226,30 @@ function EquityChart({ points }: { points: PnlPoint[] }) {
 function TradesTable({ trades }: { trades: Trade[] }) {
   if (trades.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
-        No trades yet.
+      <div className="flex flex-col items-center rounded-xl border border-dashed border-border/50 bg-card/40 px-6 py-12 text-center">
+        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-muted">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" className="text-muted-foreground" aria-hidden="true">
+            <rect x="1" y="5" width="14" height="10" rx="1.25" />
+            <path d="M5 5V3.5a3 3 0 0 1 6 0V5" />
+          </svg>
+        </div>
+        <p className="text-sm font-medium text-muted-foreground">No trades yet</p>
       </div>
     );
   }
   return (
-    <div className="overflow-hidden rounded-lg border border-border/60">
+    <div className="overflow-hidden rounded-xl border border-border/60">
       <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+        <thead className="border-b border-border/60 bg-muted/30 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
           <tr>
-            <th className="px-3 py-2 text-left">Market</th>
-            <th className="px-3 py-2 text-left">Side</th>
-            <th className="px-3 py-2 text-right">Entry</th>
-            <th className="px-3 py-2 text-right">Exit</th>
-            <th className="px-3 py-2 text-right">P&L</th>
-            <th className="px-3 py-2 text-left">Fill</th>
-            <th className="px-3 py-2 text-left">Flag</th>
-            <th className="px-3 py-2 text-left">Cat</th>
+            <th className="px-4 py-3 text-left">Market</th>
+            <th className="px-4 py-3 text-left">Side</th>
+            <th className="px-4 py-3 text-right">Entry</th>
+            <th className="px-4 py-3 text-right">Exit</th>
+            <th className="px-4 py-3 text-right">P&L</th>
+            <th className="px-4 py-3 text-left">Fill</th>
+            <th className="px-4 py-3 text-left">Flag</th>
+            <th className="px-4 py-3 text-left">Cat</th>
           </tr>
         </thead>
         <tbody>
@@ -171,22 +258,20 @@ function TradesTable({ trades }: { trades: Trade[] }) {
             const cls = pnl > 0 ? "text-profit" : pnl < 0 ? "text-loss" : "";
             return (
               <tr key={tr.trade_id} className="border-t border-border/40 hover:bg-muted/20">
-                <td className="px-3 py-2 font-mono text-[12px]">
-                  {tr.market_id.slice(0, 14)}…
+                <td className="px-4 py-2.5 font-mono text-[12px]">
+                  {tr.market_id.length > 16 ? `${tr.market_id.slice(0, 16)}…` : tr.market_id}
                 </td>
-                <td className="px-3 py-2">{tr.side}</td>
-                <td className="px-3 py-2 text-right font-mono">{tr.entry_price.toFixed(3)}</td>
-                <td className="px-3 py-2 text-right font-mono">
+                <td className="px-4 py-2.5 text-sm">{tr.side}</td>
+                <td className="px-4 py-2.5 text-right font-mono">{tr.entry_price.toFixed(3)}</td>
+                <td className="px-4 py-2.5 text-right font-mono">
                   {tr.exit_price === null ? "—" : tr.exit_price.toFixed(3)}
                 </td>
-                <td className={cn("px-3 py-2 text-right font-mono", cls)}>
+                <td className={cn("px-4 py-2.5 text-right font-mono", cls)}>
                   {formatUsd(pnl, { sign: true })}
                 </td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{tr.fill_type}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{tr.realism_flag}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {tr.market_category ?? "—"}
-                </td>
+                <td className="px-4 py-2.5 text-xs text-muted-foreground">{tr.fill_type}</td>
+                <td className="px-4 py-2.5 text-xs text-muted-foreground">{tr.realism_flag}</td>
+                <td className="px-4 py-2.5 text-xs text-muted-foreground">{tr.market_category ?? "—"}</td>
               </tr>
             );
           })}

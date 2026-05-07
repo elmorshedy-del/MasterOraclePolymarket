@@ -4,7 +4,6 @@
 
 @layer base {
   :root {
-    /* Light theme — kept for toggle but dark is default */
     --background: 0 0% 100%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
@@ -17,29 +16,31 @@
     --primary-foreground: 210 40% 98%;
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 222 47% 11%;
-    --radius: 0.6rem;
+    --ring: 243 75% 59%;
+    --radius: 0.5rem;
     --profit: 142 71% 45%;
     --loss: 0 84% 60%;
+    --highlight: 243 75% 65%;
   }
 
   .dark {
-    /* Dark theme — pleasant, not Bloomberg-terminal */
-    --background: 220 13% 8%;
-    --foreground: 210 20% 96%;
-    --card: 220 13% 11%;
-    --card-foreground: 210 20% 96%;
-    --muted: 220 13% 14%;
-    --muted-foreground: 220 9% 64%;
-    --accent: 220 13% 18%;
-    --accent-foreground: 210 20% 96%;
-    --primary: 210 20% 96%;
-    --primary-foreground: 220 13% 11%;
-    --border: 220 13% 18%;
-    --input: 220 13% 18%;
-    --ring: 217 91% 60%;
-    --profit: 142 65% 55%;
-    --loss: 0 75% 65%;
+    /* Deep space navy — premium trading terminal */
+    --background: 228 32% 5%;
+    --foreground: 210 18% 93%;
+    --card: 228 26% 8%;
+    --card-foreground: 210 18% 93%;
+    --muted: 228 22% 12%;
+    --muted-foreground: 220 10% 54%;
+    --accent: 228 22% 14%;
+    --accent-foreground: 210 18% 93%;
+    --primary: 210 18% 93%;
+    --primary-foreground: 228 32% 5%;
+    --border: 228 18% 17%;
+    --input: 228 18% 17%;
+    --ring: 243 75% 65%;
+    --profit: 158 65% 52%;
+    --loss: 0 70% 63%;
+    --highlight: 243 75% 65%;
   }
 }
 
@@ -47,8 +48,26 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv11", "ss01";
   }
+
+  /* Premium dark background: radial highlight glow + dot grid */
+  html.dark body {
+    background-image:
+      radial-gradient(ellipse 70% 30% at 50% 0%, hsl(var(--highlight) / 0.07) 0%, transparent 60%),
+      radial-gradient(circle, hsl(220 25% 40% / 0.08) 1px, transparent 1px);
+    background-size: auto, 28px 28px;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes shimmer {
+  to { background-position: 200% center; }
 }
