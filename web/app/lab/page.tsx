@@ -78,7 +78,6 @@ export default function StrategyLabPage() {
         overrides = JSON.parse(overrideJson || "{}");
       } catch {
         setError("Overrides must be valid JSON");
-        setSubmitting(false);
         return;
       }
       overrides = { ...overrides, ...extraOverrides };
