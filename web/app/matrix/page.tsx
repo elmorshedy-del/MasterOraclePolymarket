@@ -21,7 +21,7 @@ const DIMS = [
   "fill_type",
   "realism_flag",
   "source",
-  "slippage_bucket",   // walk-derived; the honest gap-to-real-money pivot
+  "slippage_bucket",
 ];
 
 const METRICS = ["total_pnl", "trade_count", "win_rate", "avg_pnl"];
@@ -57,88 +57,115 @@ export default function MatrixPage() {
     grid[r][c] = cell;
   }
 
-  // Color scaling for the chosen metric
   const values = cells.map((c) => valueFor(c, metric)).filter((v): v is number => Number.isFinite(v));
   const minV = values.length > 0 ? Math.min(...values) : 0;
   const maxV = values.length > 0 ? Math.max(...values) : 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Matrix</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pivot any two tags. Cell color = {metric.replace("_", " ")}. Numbers reflect after-haircut values.
-        </p>
-      </div>
+    <div className="space-y-8">
 
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Hero */}
+      <section>
+        <h1 className="text-[2rem] font-bold tracking-tight">Matrix</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Pivot any two tags. Cell color intensity = {metric.replace(/_/g, " ")}. Values reflect after-haircut.
+        </p>
+      </section>
+
+      {/* Controls */}
+      <section className="flex flex-wrap items-end gap-3">
         <Picker label="Rows" value={row} onChange={setRow} options={DIMS} />
         <Picker label="Cols" value={col} onChange={setCol} options={DIMS} />
-        <Picker label="Metric" value={metric} onChange={(v) => setMetric(v as any)} options={METRICS} />
+        <Picker label="Metric" value={metric} onChange={(v) => setMetric(v as typeof metric)} options={METRICS} />
         <Picker
           label="Window"
           value={String(hours)}
           onChange={(v) => setHours(Number(v))}
           options={["24", "72", "168", "720", "2160"]}
+          formatLabel={(v) => `${v}h`}
         />
-      </div>
+      </section>
 
-      <div className="overflow-x-auto rounded-lg border border-border/60">
-        <table className="text-xs">
-          <thead className="bg-muted/40">
-            <tr>
-              <th className="sticky left-0 z-10 bg-muted/40 px-3 py-2 text-left text-muted-foreground">
-                {row} \ {col}
-              </th>
-              {colKeys.map((c) => (
-                <th key={c} className="px-3 py-2 text-left font-mono text-[11px] text-muted-foreground">
-                  {c}
+      {/* Matrix table */}
+      {cells.length === 0 ? (
+        <div className="flex flex-col items-center rounded-xl border border-dashed border-border/50 bg-card/40 px-6 py-14 text-center">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-muted">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" className="text-muted-foreground" aria-hidden="true">
+              <rect x="1" y="1" width="6" height="6" rx="1" />
+              <rect x="9" y="1" width="6" height="6" rx="1" />
+              <rect x="1" y="9" width="6" height="6" rx="1" />
+              <rect x="9" y="9" width="6" height="6" rx="1" />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-muted-foreground">No data for this pivot</p>
+          <p className="mt-1 text-xs text-muted-foreground/60">Try adjusting the time window or dimensions</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border/60">
+          <table className="text-xs">
+            <thead className="border-b border-border/60 bg-muted/30">
+              <tr>
+                <th className="sticky left-0 z-10 bg-muted/30 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 backdrop-blur">
+                  {row} \ {col}
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rowKeys.map((r) => (
-              <tr key={r} className="border-t border-border/40">
-                <th className="sticky left-0 bg-card px-3 py-2 text-left font-mono text-[11px] text-foreground">
-                  {r}
-                </th>
-                {colKeys.map((c) => {
-                  const cell = grid[r]?.[c];
-                  if (!cell) return <td key={c} className="px-3 py-2" />;
-                  const v = valueFor(cell, metric);
-                  return (
-                    <td
-                      key={c}
-                      className="px-3 py-2 text-right"
-                      style={{ background: cellColor(v, minV, maxV, metric) }}
-                      title={`${cell.trade_count} trades · pnl ${formatUsd(cell.total_pnl)}`}
-                    >
-                      <span className="font-mono">{displayCell(cell, metric)}</span>
-                    </td>
-                  );
-                })}
+                {colKeys.map((c) => (
+                  <th key={c} className="px-3 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                    {c}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rowKeys.map((r) => (
+                <tr key={r} className="border-t border-border/40">
+                  <th className="sticky left-0 z-10 bg-card px-4 py-2.5 text-left font-mono text-[11px] font-semibold text-foreground">
+                    {r}
+                  </th>
+                  {colKeys.map((c) => {
+                    const cell = grid[r]?.[c];
+                    if (!cell) return <td key={c} className="px-3 py-2.5" />;
+                    const v = valueFor(cell, metric);
+                    return (
+                      <td
+                        key={c}
+                        className="px-3 py-2.5 text-right transition-colors"
+                        style={{ backgroundColor: cellColor(v, minV, maxV, metric) }}
+                        title={`${cell.trade_count} trades · pnl ${formatUsd(cell.total_pnl)}`}
+                      >
+                        <span className="font-mono font-semibold">{displayCell(cell, metric)}</span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
 function Picker({
-  label, value, onChange, options,
-}: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  label, value, onChange, options, formatLabel,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  formatLabel?: (v: string) => string;
+}) {
   return (
-    <label className="flex items-center gap-2 text-xs text-muted-foreground">
-      {label}
+    <label className="space-y-1.5">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{label}</div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-md border border-border bg-card px-2 py-1 font-mono text-[12px] text-foreground"
+        className="cursor-pointer rounded-xl border border-border bg-card px-3 py-2 font-mono text-[12px] text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
       >
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        {options.map((o) => (
+          <option key={o} value={o}>{formatLabel ? formatLabel(o) : o}</option>
+        ))}
       </select>
     </label>
   );

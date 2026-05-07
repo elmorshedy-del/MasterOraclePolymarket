@@ -82,19 +82,22 @@ export default function TradeExplorerPage() {
   const trades = tradesResp?.trades ?? [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <section>
-        <h1 className="text-2xl font-semibold tracking-tight">Trade Explorer</h1>
+        <h1 className="text-[2rem] font-bold tracking-tight">Trade Explorer</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Fills, open positions, and closed trades across all sleeves.
+        </p>
       </section>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Fills last hour" value={String(health?.db.fills_last_1h ?? fills.length)} />
-        <StatCard label="Open positions" value={String(health?.db.open_positions ?? positions.length)} />
-        <StatCard label="Closed trades last hour" value={String(health?.db.trades_last_1h ?? 0)} />
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Fills last hour" sublabel="recent executions" value={String(health?.db.fills_last_1h ?? fills.length)} accent="sky" />
+        <StatCard label="Open positions" sublabel="live exposure" value={String(health?.db.open_positions ?? positions.length)} accent="highlight" />
+        <StatCard label="Closed trades" sublabel="last hour" value={String(health?.db.trades_last_1h ?? 0)} accent="profit" />
       </section>
 
       <section className="flex flex-wrap items-end gap-3">
-        <div className="flex rounded-md border border-border/60 bg-card p-1">
+        <div className="flex rounded-xl border border-border/60 bg-card p-1">
           <TabButton active={view === "fills"} onClick={() => setView("fills")}>
             Fills
           </TabButton>
@@ -111,7 +114,7 @@ export default function TradeExplorerPage() {
             value={sleeve}
             onChange={(e) => setSleeve(e.target.value)}
             placeholder="(any)"
-            className="w-64 rounded-md border border-border bg-card px-3 py-2 font-mono text-sm"
+            className="w-64 rounded-xl border border-border bg-card px-3 py-2 font-mono text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </Filter>
         {view === "closed" && (
@@ -119,7 +122,7 @@ export default function TradeExplorerPage() {
             <select
               value={source}
               onChange={(e) => setSource(e.target.value)}
-              className="rounded-md border border-border bg-card px-3 py-2 text-sm"
+              className="cursor-pointer rounded-xl border border-border bg-card px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">all</option>
               <option value="live">live</option>
@@ -136,13 +139,27 @@ export default function TradeExplorerPage() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+type Accent = "profit" | "highlight" | "sky" | "amber";
+const BORDER: Record<Accent, string> = {
+  profit:    "from-profit/25 via-profit/5 to-transparent",
+  highlight: "from-highlight/25 via-highlight/5 to-transparent",
+  sky:       "from-sky-500/25 via-sky-500/5 to-transparent",
+  amber:     "from-amber-400/25 via-amber-400/5 to-transparent",
+};
+const VALUE_CLS: Record<Accent, string> = {
+  profit: "text-profit", highlight: "text-highlight", sky: "text-sky-400", amber: "text-amber-400",
+};
+
+function StatCard({ label, sublabel, value, accent }: { label: string; sublabel: string; value: string; accent: Accent }) {
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-4">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        {label}
+    <div className={cn("rounded-xl bg-gradient-to-br p-px", BORDER[accent])}>
+      <div className="flex flex-col gap-3 rounded-xl bg-card p-5">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
+          <div className="mt-0.5 text-[10px] text-muted-foreground/50">{sublabel}</div>
+        </div>
+        <div className={cn("font-mono text-4xl font-bold leading-none tracking-tight", VALUE_CLS[accent])}>{value}</div>
       </div>
-      <div className="mt-2 font-mono text-2xl font-semibold tracking-tight">{value}</div>
     </div>
   );
 }
@@ -161,7 +178,7 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded px-3 py-1.5 text-xs font-medium transition-colors",
+        "cursor-pointer rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
         active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
@@ -309,16 +326,16 @@ function DataTable({
 }) {
   const rows = Array.isArray(children) ? children.length : children ? 1 : 0;
   return (
-    <section className="overflow-auto rounded-lg border border-border/60">
+    <section className="overflow-auto rounded-xl border border-border/60">
       <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
+        <thead className="border-b border-border/60 bg-muted/30 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
           {header}
         </thead>
         <tbody>
           {children}
           {rows === 0 && (
             <tr>
-              <td colSpan={colSpan} className="p-8 text-center text-sm text-muted-foreground">
+              <td colSpan={colSpan} className="p-10 text-center text-sm text-muted-foreground/60">
                 {empty}
               </td>
             </tr>
@@ -331,8 +348,8 @@ function DataTable({
 
 function Filter({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="space-y-1">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+    <label className="space-y-1.5">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{label}</div>
       {children}
     </label>
   );
