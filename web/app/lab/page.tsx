@@ -166,7 +166,7 @@ export default function StrategyLabPage() {
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-4">
           <button
-            disabled={!strategy || submitting}
+            disabled={!strategy || submitting || days < 1}
             onClick={() => submit()}
             className="cursor-pointer rounded-xl bg-foreground px-5 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
