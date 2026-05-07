@@ -129,7 +129,7 @@ export default function MatrixPage() {
                       <td
                         key={c}
                         className="px-3 py-2.5 text-right transition-colors"
-                        style={{ background: cellColor(v, minV, maxV, metric) }}
+                        style={{ backgroundColor: cellColor(v, minV, maxV, metric) }}
                         title={`${cell.trade_count} trades · pnl ${formatUsd(cell.total_pnl)}`}
                       >
                         <span className="font-mono font-semibold">{displayCell(cell, metric)}</span>
